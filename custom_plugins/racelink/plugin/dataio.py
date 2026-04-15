@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, TypeAlias
+from typing import Any
 
 from data_export import DataExporter
 from data_import import DataImporter
@@ -14,9 +14,9 @@ from racelink.state.persistence import dump_records
 
 logger = logging.getLogger(__name__)
 
-ExportPayload: TypeAlias = dict[str, str]
-JSONPayload: TypeAlias = dict[str, Any]
-RegisterArgs: TypeAlias = dict[str, Any]
+type ExportPayload = dict[str, str]
+type JSONPayload = dict[str, Any]
+type RegisterArgs = dict[str, Any]
 
 
 class RotorHazardDataIOMixin:

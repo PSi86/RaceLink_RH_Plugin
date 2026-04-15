@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, TypeAlias
+from typing import Any
 
 from EventActions import ActionEffect
 from RHUI import UIField, UIFieldSelectOption, UIFieldType
@@ -12,11 +12,11 @@ from racelink.domain import RL_FLAG_HAS_BRI, RL_FLAG_POWER_ON, get_specials_conf
 
 logger = logging.getLogger(__name__)
 
-ActionPayload: TypeAlias = dict[str, Any]
-RegisterArgs: TypeAlias = dict[str, Any]
-OptionMeta: TypeAlias = dict[str, Any]
-SelectOptions: TypeAlias = list[UIFieldSelectOption]
-UIFields: TypeAlias = list[UIField]
+type ActionPayload = dict[str, Any]
+type RegisterArgs = dict[str, Any]
+type OptionMeta = dict[str, Any]
+type SelectOptions = list[UIFieldSelectOption]
+type UIFields = list[UIField]
 
 
 class RotorHazardActionsMixin:

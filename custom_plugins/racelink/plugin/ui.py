@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, TypeAlias
+from typing import Any
 
 from RHUI import UIField, UIFieldSelectOption, UIFieldType
 
@@ -16,7 +16,7 @@ from .source import RotorHazardSource
 
 logger = logging.getLogger(__name__)
 
-DeviceOptionMap: TypeAlias = dict[str, list[UIFieldSelectOption]]
+type DeviceOptionMap = dict[str, list[UIFieldSelectOption]]
 
 
 class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
@@ -139,12 +139,12 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
             for device in self._devices()
         ]
 
-    def rl_createUiDevList(  # noqa: N802, N803, FBT002
+    def rl_createUiDevList(  # noqa: N802
         self,
         dev_types: list[int] | None = None,
         capabilities: list[str] | None = None,
-        outputDevices: bool = True,
-        outputGroups: bool = True,
+        outputDevices: bool = True,  # noqa: FBT001, FBT002, N803
+        outputGroups: bool = True,  # noqa: FBT001, FBT002, N803
     ) -> DeviceOptionMap:
         """Build filtered device and group option lists for the UI."""
         logger.debug("RL: Creating filtered UI device/group list")
@@ -235,9 +235,9 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
             "All WLED Nodes"
         )
 
-    def createUiGroupList(  # noqa: N802, FBT002
+    def createUiGroupList(  # noqa: N802
         self,
-        exclude_static: bool = False,
+        exclude_static: bool = False,  # noqa: FBT001, FBT002
     ) -> list[UIFieldSelectOption]:
         """Build the selectable group list for the UI."""
         logger.debug("RL: Creating UI group select options")

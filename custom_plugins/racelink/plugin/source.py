@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any, TypeAlias
+from typing import Any
 
 from racelink.core import EventSource
 
-HeatSlot: TypeAlias = tuple[int, str, str]
+type HeatSlot = tuple[int, str, str]
 
 
 class RotorHazardSource(EventSource):
