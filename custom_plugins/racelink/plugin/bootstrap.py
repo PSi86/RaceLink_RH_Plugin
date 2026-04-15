@@ -1,5 +1,7 @@
 """RotorHazard bootstrap for the RaceLink plugin package."""
 
+# ruff: noqa: I001
+
 from __future__ import annotations
 
 import logging
