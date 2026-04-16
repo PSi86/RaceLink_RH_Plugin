@@ -16,6 +16,7 @@ PLUGIN_NAME = "racelink"
 PLUGIN_RELATIVE_PATH = Path("custom_plugins") / PLUGIN_NAME
 VENDOR_RELATIVE_PATH = Path("vendor") / "site-packages"
 HOST_REQUIRED_ENTRIES = ("controller.py", "racelink")
+REPO_ROOT_FILES = ("README.md", "LICENSE", "pyproject.toml")
 PLUGIN_IGNORED_DIRS = {".git", ".github", ".ruff_cache", ".venv", "__pycache__"}
 PLUGIN_IGNORED_SUFFIXES = {".pyc", ".pyo"}
 
@@ -110,6 +111,12 @@ def _patch_manifest(stage_plugin_dir: Path) -> dict[str, object]:
     return manifest
 
 
+def _archive_root_name(release_tag: str) -> str:
+    """Build the top-level folder name used inside the release ZIP."""
+    label = str(release_tag).strip()
+    return f"RaceLink_RH-plugin-{label}" if label else "RaceLink_RH-plugin-offline"
+
+
 def _bundle_name(manifest: dict[str, object], release_tag: str) -> str:
     version = str(manifest.get("version", "0.0.0"))
     label = str(release_tag).strip() or f"v{version}"
@@ -117,9 +124,9 @@ def _bundle_name(manifest: dict[str, object], release_tag: str) -> str:
 
 
 def _write_zip(stage_root: Path, zip_path: Path) -> None:
-    plugin_root = stage_root / PLUGIN_NAME
+    archive_root = next(path for path in stage_root.iterdir() if path.is_dir())
     with ZipFile(zip_path, "w", compression=ZIP_DEFLATED) as archive:
-        for file_path in sorted(plugin_root.rglob("*")):
+        for file_path in sorted(archive_root.rglob("*")):
             if file_path.is_dir():
                 continue
             if "__pycache__" in file_path.parts:
@@ -130,7 +137,8 @@ def _write_zip(stage_root: Path, zip_path: Path) -> None:
 
 
 def _validate_stage(stage_root: Path) -> None:
-    stage_plugin_dir = stage_root / PLUGIN_NAME
+    archive_root = next(path for path in stage_root.iterdir() if path.is_dir())
+    stage_plugin_dir = archive_root / PLUGIN_RELATIVE_PATH
     manifest = json.loads((stage_plugin_dir / "manifest.json").read_text("utf-8"))
     dependencies = manifest.get("dependencies", [])
     if dependencies:
@@ -151,7 +159,7 @@ def _validate_stage(stage_root: Path) -> None:
         importlib.import_module("racelink.web.blueprint")
 
         plugins_parent = types.ModuleType("plugins")
-        plugins_parent.__path__ = [str(stage_root)]
+        plugins_parent.__path__ = [str(archive_root / "custom_plugins")]
         sys.modules["plugins"] = plugins_parent
 
         plugin_init = stage_plugin_dir / "__init__.py"
@@ -295,9 +303,15 @@ def build_offline_release(
         shutil.rmtree(stage_root)
     stage_root.mkdir(parents=True, exist_ok=True)
 
-    stage_plugin_dir = stage_root / PLUGIN_NAME
+    archive_root = stage_root / _archive_root_name(release_tag)
+    archive_root.mkdir(parents=True, exist_ok=True)
+    stage_plugin_dir = archive_root / PLUGIN_RELATIVE_PATH
     _copy_plugin_tree(_plugin_source_dir(), stage_plugin_dir)
     manifest = _patch_manifest(stage_plugin_dir)
+    for root_file in REPO_ROOT_FILES:
+        source_path = _repo_root() / root_file
+        if source_path.is_file():
+            shutil.copy2(source_path, archive_root / root_file)
     _copy_host_source(host_source_dir, stage_plugin_dir)
     _validate_stage(stage_root)
 
