@@ -1,0 +1,322 @@
+"""Build a self-contained offline release ZIP for the RaceLink RH plugin."""
+
+from __future__ import annotations
+
+import argparse
+import importlib
+import importlib.util
+import json
+import shutil
+import sys
+import types
+from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
+
+PLUGIN_RELATIVE_PATH = Path("custom_plugins") / "racelink"
+VENDOR_RELATIVE_PATH = Path("vendor") / "site-packages"
+HOST_REQUIRED_ENTRIES = ("controller.py", "racelink")
+PLUGIN_IGNORED_DIRS = {".git", ".github", ".ruff_cache", ".venv", "__pycache__"}
+PLUGIN_IGNORED_SUFFIXES = {".pyc", ".pyo"}
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Build an offline-installable RaceLink RotorHazard plugin ZIP."
+    )
+    parser.add_argument(
+        "--host-source",
+        required=True,
+        type=Path,
+        help="Path to a checked-out RaceLink_Host repository.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=Path("dist"),
+        type=Path,
+        help="Directory that will receive the staged bundle and ZIP file.",
+    )
+    parser.add_argument(
+        "--release-tag",
+        default="",
+        help="Optional release label used in the ZIP filename.",
+    )
+    return parser.parse_args()
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _plugin_source_dir() -> Path:
+    return _repo_root() / PLUGIN_RELATIVE_PATH
+
+
+def _ignore_plugin_copy(_directory: str, entries: list[str]) -> set[str]:
+    ignored: set[str] = set()
+    for entry in entries:
+        entry_path = Path(entry)
+        if entry in PLUGIN_IGNORED_DIRS or entry_path.suffix in PLUGIN_IGNORED_SUFFIXES:
+            ignored.add(entry)
+    return ignored
+
+
+def _copy_plugin_tree(source_dir: Path, stage_plugin_dir: Path) -> None:
+    shutil.copytree(
+        source_dir,
+        stage_plugin_dir,
+        ignore=_ignore_plugin_copy,
+        dirs_exist_ok=False,
+    )
+
+
+def _copy_host_entry(source_path: Path, target_path: Path) -> None:
+    if source_path.is_dir():
+        shutil.copytree(source_path, target_path, dirs_exist_ok=True)
+        return
+    shutil.copy2(source_path, target_path)
+
+
+def _copy_host_source(host_source_dir: Path, stage_plugin_dir: Path) -> None:
+    vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
+    vendor_root.mkdir(parents=True, exist_ok=True)
+
+    for entry_name in HOST_REQUIRED_ENTRIES:
+        source_path = host_source_dir / entry_name
+        if not source_path.exists():
+            message = f"Missing required RaceLink_Host entry: {source_path}"
+            raise FileNotFoundError(message)
+        _copy_host_entry(source_path, vendor_root / entry_name)
+
+    optional_roots = (
+        ("pages", host_source_dir / "pages"),
+        ("static", host_source_dir / "static"),
+        ("racelink/pages", host_source_dir / "racelink" / "pages"),
+        ("racelink/static", host_source_dir / "racelink" / "static"),
+    )
+    for relative_name, source_path in optional_roots:
+        if source_path.exists():
+            _copy_host_entry(source_path, vendor_root / relative_name)
+
+
+def _patch_manifest(stage_plugin_dir: Path) -> dict[str, object]:
+    manifest_path = stage_plugin_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["dependencies"] = []
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def _bundle_name(manifest: dict[str, object], release_tag: str) -> str:
+    version = str(manifest.get("version", "0.0.0"))
+    label = str(release_tag).strip() or f"v{version}"
+    return f"racelink-rh-plugin-offline-{label}.zip"
+
+
+def _write_zip(stage_root: Path, zip_path: Path) -> None:
+    with ZipFile(zip_path, "w", compression=ZIP_DEFLATED) as archive:
+        for file_path in sorted(stage_root.rglob("*")):
+            if file_path.is_dir():
+                continue
+            if "__pycache__" in file_path.parts:
+                continue
+            if file_path.suffix in PLUGIN_IGNORED_SUFFIXES:
+                continue
+            archive.write(file_path, file_path.relative_to(stage_root))
+
+
+def _validate_stage(stage_root: Path) -> None:
+    stage_plugin_dir = stage_root / PLUGIN_RELATIVE_PATH
+    manifest = json.loads((stage_plugin_dir / "manifest.json").read_text("utf-8"))
+    dependencies = manifest.get("dependencies", [])
+    if dependencies:
+        message = f"Offline manifest still declares dependencies: {dependencies}"
+        raise RuntimeError(message)
+
+    vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
+    if not (vendor_root / "controller.py").is_file():
+        raise RuntimeError("Bundled controller.py is missing from offline artifact")
+    if not (vendor_root / "racelink").is_dir():
+        raise RuntimeError("Bundled racelink package is missing from offline artifact")
+
+    sys.path.insert(0, str(vendor_root))
+    created_stub_modules = _install_rotorhazard_stubs()
+    try:
+        importlib.import_module("controller")
+        importlib.import_module("racelink.app")
+        importlib.import_module("racelink.web.blueprint")
+
+        plugins_parent = types.ModuleType("plugins")
+        plugins_parent.__path__ = [str(stage_root / "custom_plugins")]
+        sys.modules["plugins"] = plugins_parent
+
+        plugin_init = stage_plugin_dir / "__init__.py"
+        spec = importlib.util.spec_from_file_location(
+            "plugins.racelink",
+            plugin_init,
+            submodule_search_locations=[str(stage_plugin_dir)],
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError("Unable to create import spec for staged plugin")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["plugins.racelink"] = module
+        spec.loader.exec_module(module)
+        if not hasattr(module, "initialize"):
+            raise RuntimeError("Staged plugin package does not expose initialize()")
+    finally:
+        if sys.path and sys.path[0] == str(vendor_root):
+            sys.path.pop(0)
+        for module_name in ("plugins.racelink", "plugins", *created_stub_modules):
+            sys.modules.pop(module_name, None)
+
+
+def _install_stub(module_name: str, module: types.ModuleType) -> str | None:
+    """Register one temporary validation stub if the module is missing."""
+    if module_name in sys.modules:
+        return None
+
+    sys.modules[module_name] = module
+    return module_name
+
+
+def _build_eventmanager_stub() -> types.ModuleType:
+    """Build a stub for the RotorHazard event manager module."""
+    eventmanager = types.ModuleType("eventmanager")
+
+    class _Evt:
+        DATA_IMPORT_INITIALIZE = "DATA_IMPORT_INITIALIZE"
+        DATA_EXPORT_INITIALIZE = "DATA_EXPORT_INITIALIZE"
+        ACTIONS_INITIALIZE = "ACTIONS_INITIALIZE"
+        STARTUP = "STARTUP"
+        RACE_START = "RACE_START"
+        RACE_FINISH = "RACE_FINISH"
+        RACE_STOP = "RACE_STOP"
+
+    eventmanager.Evt = _Evt
+    return eventmanager
+
+
+def _build_eventactions_stub() -> types.ModuleType:
+    """Build a stub for the RotorHazard event actions module."""
+    event_actions = types.ModuleType("EventActions")
+
+    class ActionEffect:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+    event_actions.ActionEffect = ActionEffect
+    return event_actions
+
+
+def _build_rhui_stub() -> types.ModuleType:
+    """Build a stub for RotorHazard UI field classes."""
+    rhui = types.ModuleType("RHUI")
+
+    class UIField:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+    class UIFieldSelectOption:
+        def __init__(self, value: object, label: object) -> None:
+            self.value = value
+            self.label = label
+
+    class UIFieldType:
+        SELECT = "SELECT"
+        BASIC_INT = "BASIC_INT"
+        TEXT = "TEXT"
+        CHECKBOX = "CHECKBOX"
+
+    rhui.UIField = UIField
+    rhui.UIFieldSelectOption = UIFieldSelectOption
+    rhui.UIFieldType = UIFieldType
+    return rhui
+
+
+def _build_data_export_stub() -> types.ModuleType:
+    """Build a stub for the RotorHazard data export module."""
+    data_export = types.ModuleType("data_export")
+
+    class DataExporter:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+    data_export.DataExporter = DataExporter
+    return data_export
+
+
+def _build_data_import_stub() -> types.ModuleType:
+    """Build a stub for the RotorHazard data import module."""
+    data_import = types.ModuleType("data_import")
+
+    class DataImporter:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+    data_import.DataImporter = DataImporter
+    return data_import
+
+
+def _install_rotorhazard_stubs() -> list[str]:
+    """Install lightweight stub modules needed for offline smoke imports."""
+    created: list[str] = []
+    stub_factories = (
+        ("eventmanager", _build_eventmanager_stub),
+        ("EventActions", _build_eventactions_stub),
+        ("RHUI", _build_rhui_stub),
+        ("data_export", _build_data_export_stub),
+        ("data_import", _build_data_import_stub),
+    )
+    for module_name, factory in stub_factories:
+        installed_name = _install_stub(module_name, factory())
+        if installed_name is not None:
+            created.append(installed_name)
+
+    return created
+
+
+def build_offline_release(
+    *,
+    host_source_dir: Path,
+    output_dir: Path,
+    release_tag: str,
+) -> Path:
+    """Create a self-contained offline RotorHazard plugin bundle ZIP."""
+    stage_root = output_dir / "offline-stage"
+    if stage_root.exists():
+        shutil.rmtree(stage_root)
+    stage_root.mkdir(parents=True, exist_ok=True)
+
+    stage_plugin_dir = stage_root / PLUGIN_RELATIVE_PATH
+    _copy_plugin_tree(_plugin_source_dir(), stage_plugin_dir)
+    manifest = _patch_manifest(stage_plugin_dir)
+    _copy_host_source(host_source_dir, stage_plugin_dir)
+    _validate_stage(stage_root)
+
+    zip_path = output_dir / _bundle_name(manifest, release_tag)
+    if zip_path.exists():
+        zip_path.unlink()
+    _write_zip(stage_root, zip_path)
+    return zip_path
+
+
+def main() -> int:
+    """Run the offline bundle builder from the command line."""
+    args = _parse_args()
+    zip_path = build_offline_release(
+        host_source_dir=args.host_source.resolve(),
+        output_dir=args.output_dir.resolve(),
+        release_tag=args.release_tag,
+    )
+    sys.stdout.write(f"{zip_path}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

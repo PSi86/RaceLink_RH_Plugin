@@ -1,0 +1,112 @@
+---
+name: Release Offline Bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Plugin release version (written to manifest.json)"
+        required: true
+        type: string
+      target_branch:
+        description: "Branch to update before tagging"
+        required: true
+        default: "main"
+        type: string
+
+env:
+  DEFAULT_PYTHON: "3.13"
+  RACELINK_HOST_REF: "refactoring_ng_3"
+
+jobs:
+  release-offline-bundle:
+    name: Release Offline Bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out plugin repository
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Set up Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump plugin manifest version
+        id: manifest_version
+        run: |
+          version="$(python scripts/bump_manifest_version.py --version "${{ inputs.version }}")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Fail if tag or release already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git ls-remote --tags origin "${{ steps.manifest_version.outputs.tag }}" | grep -q "${{ steps.manifest_version.outputs.tag }}"; then
+            echo "Tag ${{ steps.manifest_version.outputs.tag }} already exists on origin"
+            exit 1
+          fi
+          if gh release view "${{ steps.manifest_version.outputs.tag }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${{ steps.manifest_version.outputs.tag }} already exists"
+            exit 1
+          fi
+
+      - name: Commit version bump
+        run: |
+          git add custom_plugins/racelink/manifest.json
+          if git diff --cached --quiet; then
+            echo "Manifest version was already set to ${{ steps.manifest_version.outputs.version }}"
+            exit 1
+          fi
+          git commit -m "Release v${{ steps.manifest_version.outputs.version }}"
+
+      - name: Create and push release tag
+        run: |
+          git tag "${{ steps.manifest_version.outputs.tag }}"
+          git push origin "HEAD:${{ inputs.target_branch }}" --follow-tags
+
+      - name: Check out RaceLink_Host
+        uses: actions/checkout@v6.0.2
+        with:
+          repository: PSi86/RaceLink_Host
+          ref: ${{ env.RACELINK_HOST_REF }}
+          path: external/RaceLink_Host
+
+      - name: Install host runtime dependencies for smoke validation
+        run: python -m pip install ./external/RaceLink_Host
+
+      - name: Build offline bundle
+        id: build_bundle
+        shell: bash
+        run: |
+          python scripts/build_offline_release.py \
+            --host-source external/RaceLink_Host \
+            --output-dir dist \
+            --release-tag "${{ steps.manifest_version.outputs.tag }}" | tee /tmp/offline_bundle_path.txt
+          echo "zip_path=$(tail -n 1 /tmp/offline_bundle_path.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: racelink-rh-plugin-offline
+          path: ${{ steps.build_bundle.outputs.zip_path }}
+
+      - name: Create GitHub release and attach ZIP
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.manifest_version.outputs.tag }}
+          target_commitish: ${{ inputs.target_branch }}
+          generate_release_notes: true
+          files: ${{ steps.build_bundle.outputs.zip_path }}
