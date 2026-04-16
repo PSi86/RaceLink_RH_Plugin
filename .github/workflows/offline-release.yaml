@@ -84,9 +84,6 @@ jobs:
           ref: ${{ env.RACELINK_HOST_REF }}
           path: external/RaceLink_Host
 
-      - name: Install host runtime dependencies for smoke validation
-        run: python -m pip install ./external/RaceLink_Host
-
       - name: Build offline bundle
         id: build_bundle
         shell: bash

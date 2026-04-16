@@ -7,6 +7,7 @@ import importlib
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -15,7 +16,6 @@ from zipfile import ZIP_DEFLATED, ZipFile
 PLUGIN_NAME = "racelink"
 PLUGIN_RELATIVE_PATH = Path("custom_plugins") / PLUGIN_NAME
 VENDOR_RELATIVE_PATH = Path("vendor") / "site-packages"
-HOST_REQUIRED_ENTRIES = ("controller.py", "racelink")
 REPO_ROOT_FILES = ("README.md", "LICENSE", "pyproject.toml")
 PLUGIN_IGNORED_DIRS = {".git", ".github", ".ruff_cache", ".venv", "__pycache__"}
 PLUGIN_IGNORED_SUFFIXES = {".pyc", ".pyo"}
@@ -78,18 +78,27 @@ def _copy_host_entry(source_path: Path, target_path: Path) -> None:
     shutil.copy2(source_path, target_path)
 
 
-def _copy_host_source(host_source_dir: Path, stage_plugin_dir: Path) -> None:
+def _install_host_runtime(host_source_dir: Path, stage_plugin_dir: Path) -> None:
     vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
     vendor_root.mkdir(parents=True, exist_ok=True)
 
-    for entry_name in HOST_REQUIRED_ENTRIES:
-        source_path = host_source_dir / entry_name
-        if not source_path.exists():
-            message = f"Missing required RaceLink_Host entry: {source_path}"
-            raise FileNotFoundError(message)
-        _copy_host_entry(source_path, vendor_root / entry_name)
+    subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "--target",
+            str(vendor_root),
+            str(host_source_dir),
+        ],
+        check=True,
+    )
 
     optional_roots = (
+        ("controller.py", host_source_dir / "controller.py"),
+        ("racelink", host_source_dir / "racelink"),
         ("pages", host_source_dir / "pages"),
         ("static", host_source_dir / "static"),
         ("racelink/pages", host_source_dir / "racelink" / "pages"),
@@ -312,7 +321,7 @@ def build_offline_release(
         source_path = _repo_root() / root_file
         if source_path.is_file():
             shutil.copy2(source_path, archive_root / root_file)
-    _copy_host_source(host_source_dir, stage_plugin_dir)
+    _install_host_runtime(host_source_dir, stage_plugin_dir)
     _validate_stage(stage_root)
 
     zip_path = output_dir / _bundle_name(manifest, release_tag)
