@@ -6,7 +6,7 @@
   "description": "RotorHazard adapter plugin for RaceLink. The RaceLink web UI and core services are provided by RaceLink_Host.",
   "documentation_uri": "https://github.com/PSi86/RaceLink_RH-plugin",
   "required_rhapi_version": "1.3",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "dependencies": [
     "git+https://github.com/PSi86/RaceLink_Host.git@refactoring_ng_3"
   ]
