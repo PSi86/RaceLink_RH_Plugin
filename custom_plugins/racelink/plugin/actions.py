@@ -30,9 +30,9 @@ class RotorHazardActionsMixin:
         if register_fn is not None:
             self.controller.action_reg_fn = register_fn
             logger.debug("Saved action register function in RaceLink instance")
-            return
 
-        if not self.controller.action_reg_fn:
+        action_reg_fn = getattr(self.controller, "action_reg_fn", None)
+        if not action_reg_fn:
             return
 
         self._register_default_group_action()
@@ -40,6 +40,10 @@ class RotorHazardActionsMixin:
 
     def _register_default_group_action(self) -> None:
         """Register the default group control action."""
+        if not getattr(self.controller, "uiGroupList", None):
+            logger.debug("Skipping default RaceLink action registration: no groups")
+            return
+
         effect_options = self._get_select_options("wled_control", "presetId")
         default_effect = effect_options[0].value if effect_options else "01"
         fields = [

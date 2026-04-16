@@ -31,6 +31,40 @@ class _BootstrapState:
 _STATE = _BootstrapState()
 
 
+def _sync_adapter_state(
+    rh_adapter: RotorHazardUIAdapter,
+    *,
+    broadcast_panels: bool = False,
+) -> None:
+    """Refresh RotorHazard-facing UI bindings after controller state changes."""
+    try:
+        rh_adapter.sync_rotorhazard_ui(broadcast_panels=broadcast_panels)
+    except Exception:
+        logger.exception("Unable to synchronize RaceLink RotorHazard bindings")
+
+
+def _wrap_controller_state_hooks(
+    controller: RaceLink_Host,
+    rh_adapter: RotorHazardUIAdapter,
+) -> None:
+    """Augment controller persistence hooks with RotorHazard UI refreshes."""
+    original_load_from_db = controller.load_from_db
+    original_save_to_db = controller.save_to_db
+
+    def _load_from_db(*args: Any, **kwargs: Any) -> Any:
+        result = original_load_from_db(*args, **kwargs)
+        _sync_adapter_state(rh_adapter, broadcast_panels=True)
+        return result
+
+    def _save_to_db(*args: Any, **kwargs: Any) -> Any:
+        result = original_save_to_db(*args, **kwargs)
+        _sync_adapter_state(rh_adapter, broadcast_panels=True)
+        return result
+
+    controller.load_from_db = _load_from_db
+    controller.save_to_db = _save_to_db
+
+
 def initialize(rhapi: Any) -> None:
     """Initialize the RaceLink host runtime inside RotorHazard."""
     state_repository = get_runtime_state_repository()
@@ -43,6 +77,9 @@ def initialize(rhapi: Any) -> None:
     rh_adapter = RotorHazardUIAdapter(controller, rhapi)
     controller.rh_adapter = rh_adapter
     controller.rh_source = rh_adapter.source
+    controller.action_reg_fn = None
+    _wrap_controller_state_hooks(controller, rh_adapter)
+    controller.load_from_db()
 
     rl_app = create_runtime(
         rhapi,

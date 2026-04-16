@@ -36,6 +36,31 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
         """Return the current group repository contents."""
         return self.controller.group_repository.list()
 
+    def refresh_ui_state(self) -> None:
+        """Refresh cached controller UI lists from current repositories."""
+        self.controller.uiDeviceList = self.createUiDevList()
+        self.controller.uiGroupList = self.createUiGroupList()
+        self.controller.uiDiscoveryGroupList = self.createUiGroupList(
+            exclude_static=True
+        )
+
+    def sync_rotorhazard_ui(self, *, broadcast_panels: bool = False) -> None:
+        """Refresh cached UI state and re-register dependent RotorHazard UI hooks."""
+        self.refresh_ui_state()
+        self.register_settings()
+        self.register_quickset_ui()
+        self.registerActions()
+        if broadcast_panels:
+            self.rhapi.ui.broadcast_ui("settings")
+            self.rhapi.ui.broadcast_ui("run")
+
+    def _ensure_ui_state(self) -> None:
+        """Ensure controller UI list attributes exist before UI registration."""
+        if not hasattr(self.controller, "uiGroupList") or not hasattr(
+            self.controller, "uiDiscoveryGroupList"
+        ):
+            self.refresh_ui_state()
+
     def _get_select_options(
         self,
         fn_key: str,
@@ -61,6 +86,7 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
     def register_settings(self) -> None:
         """Register the RaceLink settings panel and quick actions."""
         logger.debug("RL: Registering settings UI elements")
+        self._ensure_ui_state()
         temp_ui_group_list = [UIFieldSelectOption(0, "New Group")]
         temp_ui_group_list += self.controller.uiDiscoveryGroupList
 
@@ -246,6 +272,7 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
 
     def register_quickset_ui(self) -> None:
         """Register the RaceLink quickset panel."""
+        self._ensure_ui_state()
         effect_options = self._get_select_options("wled_control", "presetId")
         default_effect = effect_options[0].value if effect_options else "01"
         self.rhapi.ui.register_panel("rl_quickset", "RaceLink Quickset", "run")
@@ -297,9 +324,7 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
                 UIFieldSelectOption(str(preset_id), name) for preset_id, name in parsed
             ]
         try:
-            self.register_quickset_ui()
-            self.registerActions()
-            self.rhapi.ui.broadcast_ui("run")
+            self.sync_rotorhazard_ui(broadcast_panels=True)
         except Exception:
             logger.exception("Unable to refresh RaceLink quickset UI")
 
@@ -320,15 +345,7 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
             return
 
         self.controller.group_repository.append(RL_DeviceGroup(new_group_name))
-        self.controller.uiGroupList = self.createUiGroupList()
-        self.controller.uiDiscoveryGroupList = self.createUiGroupList(
-            exclude_static=True,
-        )
-        self.register_settings()
-        self.register_quickset_ui()
-        self.registerActions()
-        self.rhapi.ui.broadcast_ui("settings")
-        self.rhapi.ui.broadcast_ui("run")
+        self.sync_rotorhazard_ui(broadcast_panels=True)
 
     def _build_new_group_name(self, configured_name: str | None) -> str:
         """Build a timestamped group name for discovery-created groups."""
