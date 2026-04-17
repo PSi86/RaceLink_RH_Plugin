@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -9,13 +10,7 @@ from typing import Any
 from controller import RaceLink_Host
 from eventmanager import Evt
 
-from racelink.app import create_runtime
-from racelink.core import NullSink
-from racelink.domain import RL_DeviceGroup
-from racelink.state import get_runtime_state_repository
-from racelink.web import register_rl_blueprint
-
-from .ui import RotorHazardUIAdapter
+from racelink.plugin.ui import RotorHazardUIAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +24,11 @@ class _BootstrapState:
 
 
 _STATE = _BootstrapState()
+
+
+def _load_runtime_module(module_name: str) -> Any:
+    """Import one RaceLink host module lazily during plugin initialization."""
+    return importlib.import_module(module_name)
 
 
 def _sync_adapter_state(
@@ -65,9 +65,27 @@ def _wrap_controller_state_hooks(
     controller.save_to_db = _save_to_db
 
 
+def _handle_startup(
+    rl_instance: Any,
+    rh_adapter: RotorHazardUIAdapter,
+    args: Any,
+) -> None:
+    """Run the RaceLink startup flow after RotorHazard is fully initialized."""
+    rl_instance.onStartup(args)
+    _sync_adapter_state(rh_adapter, broadcast_panels=True)
+
+
 def initialize(rhapi: Any) -> None:
     """Initialize the RaceLink host runtime inside RotorHazard."""
-    state_repository = get_runtime_state_repository()
+    create_runtime = _load_runtime_module("racelink.app").create_runtime
+    null_sink_factory = _load_runtime_module("racelink.core").NullSink
+    rl_device_group = _load_runtime_module("racelink.domain").RL_DeviceGroup
+    state_repository_factory = _load_runtime_module(
+        "racelink.state"
+    ).get_runtime_state_repository
+    register_rl_blueprint = _load_runtime_module("racelink.web").register_rl_blueprint
+
+    state_repository = state_repository_factory()
     controller = RaceLink_Host(
         rhapi,
         "RaceLink_Host",
@@ -79,7 +97,6 @@ def initialize(rhapi: Any) -> None:
     controller.rh_source = rh_adapter.source
     controller.action_reg_fn = None
     _wrap_controller_state_hooks(controller, rh_adapter)
-    controller.load_from_db()
 
     rl_app = create_runtime(
         rhapi,
@@ -92,7 +109,7 @@ def initialize(rhapi: Any) -> None:
             "rotorhazard_source": rh_adapter.source,
         },
         event_source=rh_adapter.source,
-        data_sink=NullSink(),
+        data_sink=null_sink_factory(),
     )
     _STATE.rl_app = rl_app
     _STATE.rl_instance = rl_app.rl_instance
@@ -102,14 +119,17 @@ def initialize(rhapi: Any) -> None:
         rl_instance=rl_app.rl_instance,
         state_repository=state_repository,
         services=rl_app.services,
-        RL_DeviceGroup=RL_DeviceGroup,
+        RL_DeviceGroup=rl_device_group,
         logger=logger,
     )
 
     rhapi.events.on(Evt.DATA_IMPORT_INITIALIZE, rh_adapter.register_rl_dataimporter)
     rhapi.events.on(Evt.DATA_EXPORT_INITIALIZE, rh_adapter.register_rl_dataexporter)
     rhapi.events.on(Evt.ACTIONS_INITIALIZE, rh_adapter.registerActions)
-    rhapi.events.on(Evt.STARTUP, rl_app.rl_instance.onStartup)
+    rhapi.events.on(
+        Evt.STARTUP,
+        lambda args: _handle_startup(rl_app.rl_instance, rh_adapter, args),
+    )
     rhapi.events.on(Evt.RACE_START, rl_app.rl_instance.onRaceStart)
     rhapi.events.on(Evt.RACE_FINISH, rl_app.rl_instance.onRaceFinish)
     rhapi.events.on(Evt.RACE_STOP, rl_app.rl_instance.onRaceStop)

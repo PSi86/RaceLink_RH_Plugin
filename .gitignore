@@ -7,3 +7,8 @@ node_modules
 .venv
 __pycache__
 dist
+dist-local
+dist-local-*
+.tmp-pi4
+.tmp-pi4-top
+.tmp-pi5

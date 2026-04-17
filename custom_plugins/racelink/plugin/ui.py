@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 """RotorHazard-specific UI adapter."""
 
 from __future__ import annotations
@@ -7,12 +8,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from RHUI import UIField, UIFieldSelectOption, UIFieldType
-
 from racelink.domain import RL_DeviceGroup, get_dev_type_info, get_specials_config
-
-from .actions import RotorHazardActionsMixin
-from .dataio import RotorHazardDataIOMixin
-from .source import RotorHazardSource
+from racelink.plugin.actions import RotorHazardActionsMixin
+from racelink.plugin.dataio import RotorHazardDataIOMixin
+from racelink.plugin.source import RotorHazardSource
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +272,9 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
     def register_quickset_ui(self) -> None:
         """Register the RaceLink quickset panel."""
         self._ensure_ui_state()
+        if not getattr(self.controller, "uiGroupList", None):
+            logger.debug("Skipping RaceLink quickset registration: no groups yet")
+            return
         effect_options = self._get_select_options("wled_control", "presetId")
         default_effect = effect_options[0].value if effect_options else "01"
         self.rhapi.ui.register_panel("rl_quickset", "RaceLink Quickset", "run")

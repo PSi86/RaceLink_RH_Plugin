@@ -5,8 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Plugin release version (written to manifest.json)"
-        required: true
+        description: "Optional release version override. Leave empty to auto-increment."
+        required: false
+        default: ""
         type: string
       target_branch:
         description: "Branch to update before tagging"

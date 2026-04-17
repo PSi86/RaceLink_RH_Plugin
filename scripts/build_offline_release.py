@@ -16,9 +16,17 @@ from zipfile import ZIP_DEFLATED, ZipFile
 PLUGIN_NAME = "racelink"
 PLUGIN_RELATIVE_PATH = Path("custom_plugins") / PLUGIN_NAME
 VENDOR_RELATIVE_PATH = Path("vendor") / "site-packages"
-REPO_ROOT_FILES = ("README.md", "LICENSE", "pyproject.toml")
+REPO_ROOT_FILES = ("README.md", "LICENSE")
 PLUGIN_IGNORED_DIRS = {".git", ".github", ".ruff_cache", ".venv", "__pycache__"}
 PLUGIN_IGNORED_SUFFIXES = {".pyc", ".pyo"}
+VENDORED_RUNTIME_KEEP = {
+    "controller.py",
+    "serial",
+}
+VENDORED_DISTINFO_PREFIXES = {
+    "pyserial-",
+    "racelink_host-",
+}
 
 
 def _parse_args() -> argparse.Namespace:
@@ -78,6 +86,50 @@ def _copy_host_entry(source_path: Path, target_path: Path) -> None:
     shutil.copy2(source_path, target_path)
 
 
+def _merge_installed_host_package(vendor_root: Path, stage_plugin_dir: Path) -> None:
+    """Merge the installed RaceLink package into the plugin root safely."""
+    installed_package_dir = vendor_root / "racelink"
+    if not installed_package_dir.is_dir():
+        raise RuntimeError(
+            "Installed RaceLink package is missing from vendor directory"
+        )
+
+    for child in installed_package_dir.iterdir():
+        if child.name == "__init__.py":
+            continue
+        _copy_host_entry(child, stage_plugin_dir / child.name)
+
+    shutil.rmtree(installed_package_dir)
+
+
+def _copy_host_assets(host_source_dir: Path, stage_plugin_dir: Path) -> None:
+    """Copy non-Python RaceLink web assets into the plugin root."""
+    optional_roots = (
+        ("pages", host_source_dir / "pages"),
+        ("static", host_source_dir / "static"),
+        ("pages", host_source_dir / "racelink" / "pages"),
+        ("static", host_source_dir / "racelink" / "static"),
+    )
+    for relative_name, source_path in optional_roots:
+        if source_path.exists():
+            _copy_host_entry(source_path, stage_plugin_dir / relative_name)
+
+
+def _prune_vendor_runtime(vendor_root: Path) -> None:
+    """Keep only offline-required runtime pieces in the vendored site-packages."""
+    for child in vendor_root.iterdir():
+        if child.name in VENDORED_RUNTIME_KEEP:
+            continue
+        if any(child.name.startswith(prefix) for prefix in VENDORED_DISTINFO_PREFIXES):
+            continue
+        if child.name == "racelink":
+            continue
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
 def _install_host_runtime(host_source_dir: Path, stage_plugin_dir: Path) -> None:
     vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
     vendor_root.mkdir(parents=True, exist_ok=True)
@@ -96,17 +148,16 @@ def _install_host_runtime(host_source_dir: Path, stage_plugin_dir: Path) -> None
         check=True,
     )
 
-    optional_roots = (
-        ("controller.py", host_source_dir / "controller.py"),
-        ("racelink", host_source_dir / "racelink"),
-        ("pages", host_source_dir / "pages"),
-        ("static", host_source_dir / "static"),
-        ("racelink/pages", host_source_dir / "racelink" / "pages"),
-        ("racelink/static", host_source_dir / "racelink" / "static"),
-    )
-    for relative_name, source_path in optional_roots:
-        if source_path.exists():
-            _copy_host_entry(source_path, vendor_root / relative_name)
+    controller_path = vendor_root / "controller.py"
+    if not controller_path.is_file():
+        source_controller = host_source_dir / "controller.py"
+        if not source_controller.is_file():
+            raise RuntimeError("RaceLink_Host controller.py is missing")
+        shutil.copy2(source_controller, controller_path)
+
+    _prune_vendor_runtime(vendor_root)
+    _merge_installed_host_package(vendor_root, stage_plugin_dir)
+    _copy_host_assets(host_source_dir, stage_plugin_dir)
 
 
 def _patch_manifest(stage_plugin_dir: Path) -> dict[str, object]:
@@ -145,6 +196,33 @@ def _write_zip(stage_root: Path, zip_path: Path) -> None:
             archive.write(file_path, file_path.relative_to(stage_root))
 
 
+def _validate_vendor_runtime(vendor_root: Path) -> None:
+    """Validate the pruned vendored runtime contents."""
+    if not (vendor_root / "controller.py").is_file():
+        raise RuntimeError("Bundled controller.py is missing from offline artifact")
+    if not (vendor_root / "serial").is_dir():
+        raise RuntimeError("Bundled pyserial runtime is missing from offline artifact")
+    if (vendor_root / "racelink").exists():
+        raise RuntimeError(
+            "Nested vendored racelink package should not remain in vendor"
+        )
+
+    unexpected_vendor_children = sorted(
+        child.name
+        for child in vendor_root.iterdir()
+        if child.name not in VENDORED_RUNTIME_KEEP
+        and not any(
+            child.name.startswith(prefix) for prefix in VENDORED_DISTINFO_PREFIXES
+        )
+    )
+    if unexpected_vendor_children:
+        message = (
+            "Unexpected vendored packages remain in offline artifact: "
+            f"{unexpected_vendor_children}"
+        )
+        raise RuntimeError(message)
+
+
 def _validate_stage(stage_root: Path) -> None:
     archive_root = next(path for path in stage_root.iterdir() if path.is_dir())
     stage_plugin_dir = archive_root / PLUGIN_RELATIVE_PATH
@@ -155,17 +233,18 @@ def _validate_stage(stage_root: Path) -> None:
         raise RuntimeError(message)
 
     vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
-    if not (vendor_root / "controller.py").is_file():
-        raise RuntimeError("Bundled controller.py is missing from offline artifact")
-    if not (vendor_root / "racelink").is_dir():
-        raise RuntimeError("Bundled racelink package is missing from offline artifact")
+    if not (stage_plugin_dir / "app.py").is_file():
+        raise RuntimeError("Bundled host app.py is missing from plugin root")
+    _validate_vendor_runtime(vendor_root)
 
+    custom_plugins_root = archive_root / "custom_plugins"
+    sys.path.insert(0, str(custom_plugins_root))
     sys.path.insert(0, str(vendor_root))
     created_stub_modules = _install_rotorhazard_stubs()
     try:
         importlib.import_module("controller")
         importlib.import_module("racelink.app")
-        importlib.import_module("racelink.web.blueprint")
+        importlib.import_module("racelink.web")
 
         plugins_parent = types.ModuleType("plugins")
         plugins_parent.__path__ = [str(archive_root / "custom_plugins")]
@@ -186,6 +265,8 @@ def _validate_stage(stage_root: Path) -> None:
             raise RuntimeError("Staged plugin package does not expose initialize()")
     finally:
         if sys.path and sys.path[0] == str(vendor_root):
+            sys.path.pop(0)
+        if sys.path and sys.path[0] == str(custom_plugins_root):
             sys.path.pop(0)
         for module_name in ("plugins.racelink", "plugins", *created_stub_modules):
             sys.modules.pop(module_name, None)

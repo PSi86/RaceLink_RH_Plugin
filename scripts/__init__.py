@@ -1,1 +1,1 @@
-"""Utility scripts for release packaging and repository automation."""
+"""Utility scripts for release packaging."""
