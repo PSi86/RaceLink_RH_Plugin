@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This playbook is the shortest path for maintainers to publish a new `RaceLink_RH-plugin` release.
+This playbook is the shortest path for maintainers to publish a new `RaceLink_RH_Plugin` release.
 
 ## Inputs
 
@@ -37,7 +37,7 @@ This playbook is the shortest path for maintainers to publish a new `RaceLink_RH
 ## Expected Outputs
 
 - Git tag `v<plugin-version>`
-- GitHub release for `RaceLink_RH-plugin`
+- GitHub release for `RaceLink_RH_Plugin`
 - Uploaded offline ZIP artifact containing the vendored host runtime
 
 ## Failure Hints

@@ -141,13 +141,13 @@ def _patch_manifest(stage_plugin_dir: Path) -> dict[str, object]:
 def _archive_root_name(release_tag: str) -> str:
     """Build the top-level folder name used inside the release ZIP."""
     label = str(release_tag).strip()
-    return f"RaceLink_RH-plugin-{label}" if label else "RaceLink_RH-plugin-offline"
+    return f"RaceLink_RH_Plugin-{label}" if label else "RaceLink_RH_Plugin-offline"
 
 
 def _bundle_name(manifest: dict[str, object], release_tag: str) -> str:
     version = str(manifest.get("version", "0.0.0"))
     label = str(release_tag).strip() or f"v{version}"
-    return f"racelink-rh-plugin-offline-{label}.zip"
+    return f"racelink_rh_plugin_offline_{label}.zip"
 
 
 def _write_zip(stage_root: Path, zip_path: Path) -> None:
