@@ -18,8 +18,7 @@ VERSION_PATTERN = re.compile(r"^v?(?P<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Resolve the RaceLink_Host release version "
-            "to use for a plugin release."
+            "Resolve the RaceLink_Host release version to use for a plugin release."
         )
     )
     parser.add_argument(

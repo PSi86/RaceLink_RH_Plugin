@@ -21,8 +21,7 @@ GIT_URL_REGEX = re.compile(r"^git\+https://[^\s]+$")
 DEFAULT_MANIFEST = Path("custom_plugins/racelink/manifest.json")
 GIT_URL_REFERENCE = "git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0"
 PEP508_DIRECT_WHEEL = (
-    "racelink-host @ "
-    "https://example.invalid/racelink_host-1.2.3-py3-none-any.whl"
+    "racelink-host @ https://example.invalid/racelink_host-1.2.3-py3-none-any.whl"
 )
 
 CASES = (
@@ -43,8 +42,7 @@ CASES = (
         "dependency": PEP508_DIRECT_WHEEL,
         "expected_valid": False,
         "decision": (
-            "Rejected because RHFest does not accept "
-            "PEP-508 direct references here."
+            "Rejected because RHFest does not accept PEP-508 direct references here."
         ),
     },
 )
@@ -53,8 +51,7 @@ CASES = (
 def rhfest_accepts_dependency(dependency: str) -> bool:
     """Return whether the given dependency matches RHFest's current schema."""
     return bool(
-        PYPI_PACKAGE_REGEX.fullmatch(dependency)
-        or GIT_URL_REGEX.fullmatch(dependency)
+        PYPI_PACKAGE_REGEX.fullmatch(dependency) or GIT_URL_REGEX.fullmatch(dependency)
     )
 
 
@@ -108,12 +105,10 @@ def main() -> int:
             failed = True
 
     _write_line(
-        f"Decision: use `{current_host.manifest_dependency}` "
-        "for online installations."
+        f"Decision: use `{current_host.manifest_dependency}` for online installations."
     )
     _write_line(
-        "Direct wheel references stay unsupported until RHFest "
-        "accepts PEP-508 URLs."
+        "Direct wheel references stay unsupported until RHFest accepts PEP-508 URLs."
     )
     return 1 if failed else 0
 
