@@ -1,5 +1,5 @@
 ---
-name: Release Offline Bundle
+name: Release Plugin Distribution
 
 on:
   workflow_dispatch:
@@ -17,14 +17,38 @@ on:
 
 env:
   DEFAULT_PYTHON: "3.13"
-  RACELINK_HOST_REF: "refactoring_ng_3"
 
 jobs:
-  release-offline-bundle:
-    name: Release Offline Bundle
+  release-verify:
+    name: Release Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out plugin repository
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.target_branch }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Verify generated online metadata
+        run: python scripts/sync_racelink_host_dependency.py --check
+
+      - name: Verify manifest dependency decision
+        run: python scripts/verify_manifest_dependency_formats.py
+
+      - name: Run RHFest validation
+        uses: docker://ghcr.io/rotorhazard/rhfest-action:v3
+
+  release-publish:
+    name: Release Publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    needs: release-verify
 
     steps:
       - name: Check out plugin repository
@@ -43,6 +67,17 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync generated dependency files
+        run: python scripts/sync_racelink_host_dependency.py
+
+      - name: Read RaceLink_Host checkout ref
+        id: host_dependency
+        run: |
+          ref="$(python scripts/sync_racelink_host_dependency.py --print checkout-ref)"
+          wheel="$(python scripts/sync_racelink_host_dependency.py --print host-wheel-filename)"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+          echo "wheel=${wheel}" >> "$GITHUB_OUTPUT"
 
       - name: Bump plugin manifest version
         id: manifest_version
@@ -66,7 +101,7 @@ jobs:
 
       - name: Commit version bump
         run: |
-          git add custom_plugins/racelink/manifest.json
+          git add build/deps.json pyproject.toml custom_plugins/racelink/manifest.json README.md docs/manifest-dependency-format.md
           if git diff --cached --quiet; then
             echo "Manifest version was already set to ${{ steps.manifest_version.outputs.version }}"
             exit 1
@@ -78,19 +113,22 @@ jobs:
           git tag "${{ steps.manifest_version.outputs.tag }}"
           git push origin "HEAD:${{ inputs.target_branch }}" --follow-tags
 
-      - name: Check out RaceLink_Host
-        uses: actions/checkout@v6.0.2
-        with:
-          repository: PSi86/RaceLink_Host
-          ref: ${{ env.RACELINK_HOST_REF }}
-          path: external/RaceLink_Host
+      - name: Download RaceLink_Host release wheel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p external/RaceLink_Host
+          gh release download "${{ steps.host_dependency.outputs.ref }}" \
+            --repo "PSi86/RaceLink_Host" \
+            --pattern "${{ steps.host_dependency.outputs.wheel }}" \
+            --dir external/RaceLink_Host
 
       - name: Build offline bundle
         id: build_bundle
         shell: bash
         run: |
           python scripts/build_offline_release.py \
-            --host-source external/RaceLink_Host \
+            --host-wheel "external/RaceLink_Host/${{ steps.host_dependency.outputs.wheel }}" \
             --output-dir dist \
             --release-tag "${{ steps.manifest_version.outputs.tag }}" | tee /tmp/offline_bundle_path.txt
           echo "zip_path=$(tail -n 1 /tmp/offline_bundle_path.txt)" >> "$GITHUB_OUTPUT"

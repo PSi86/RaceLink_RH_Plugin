@@ -19,10 +19,7 @@ VENDOR_RELATIVE_PATH = Path("vendor") / "site-packages"
 REPO_ROOT_FILES = ("README.md", "LICENSE")
 PLUGIN_IGNORED_DIRS = {".git", ".github", ".ruff_cache", ".venv", "__pycache__"}
 PLUGIN_IGNORED_SUFFIXES = {".pyc", ".pyo"}
-VENDORED_RUNTIME_KEEP = {
-    "controller.py",
-    "serial",
-}
+PYTHON_RUNTIME_DEPENDENCIES = ("pyserial==3.5",)
 VENDORED_DISTINFO_PREFIXES = {
     "pyserial-",
     "racelink_host-",
@@ -34,10 +31,10 @@ def _parse_args() -> argparse.Namespace:
         description="Build an offline-installable RaceLink RotorHazard plugin ZIP."
     )
     parser.add_argument(
-        "--host-source",
+        "--host-wheel",
         required=True,
         type=Path,
-        help="Path to a checked-out RaceLink_Host repository.",
+        help="Path to a released RaceLink_Host wheel artifact.",
     )
     parser.add_argument(
         "--output-dir",
@@ -79,61 +76,16 @@ def _copy_plugin_tree(source_dir: Path, stage_plugin_dir: Path) -> None:
     )
 
 
-def _copy_host_entry(source_path: Path, target_path: Path) -> None:
-    if source_path.is_dir():
-        shutil.copytree(source_path, target_path, dirs_exist_ok=True)
-        return
-    shutil.copy2(source_path, target_path)
+def _extract_host_wheel(host_wheel_path: Path, vendor_root: Path) -> None:
+    """Extract the released host wheel into the vendored site-packages directory."""
+    if host_wheel_path.suffix != ".whl":
+        raise RuntimeError(f"Host artifact is not a wheel: {host_wheel_path}")
+    with ZipFile(host_wheel_path) as archive:
+        archive.extractall(vendor_root)
 
 
-def _merge_installed_host_package(vendor_root: Path, stage_plugin_dir: Path) -> None:
-    """Merge the installed RaceLink package into the plugin root safely."""
-    installed_package_dir = vendor_root / "racelink"
-    if not installed_package_dir.is_dir():
-        raise RuntimeError(
-            "Installed RaceLink package is missing from vendor directory"
-        )
-
-    for child in installed_package_dir.iterdir():
-        if child.name == "__init__.py":
-            continue
-        _copy_host_entry(child, stage_plugin_dir / child.name)
-
-    shutil.rmtree(installed_package_dir)
-
-
-def _copy_host_assets(host_source_dir: Path, stage_plugin_dir: Path) -> None:
-    """Copy non-Python RaceLink web assets into the plugin root."""
-    optional_roots = (
-        ("pages", host_source_dir / "pages"),
-        ("static", host_source_dir / "static"),
-        ("pages", host_source_dir / "racelink" / "pages"),
-        ("static", host_source_dir / "racelink" / "static"),
-    )
-    for relative_name, source_path in optional_roots:
-        if source_path.exists():
-            _copy_host_entry(source_path, stage_plugin_dir / relative_name)
-
-
-def _prune_vendor_runtime(vendor_root: Path) -> None:
-    """Keep only offline-required runtime pieces in the vendored site-packages."""
-    for child in vendor_root.iterdir():
-        if child.name in VENDORED_RUNTIME_KEEP:
-            continue
-        if any(child.name.startswith(prefix) for prefix in VENDORED_DISTINFO_PREFIXES):
-            continue
-        if child.name == "racelink":
-            continue
-        if child.is_dir():
-            shutil.rmtree(child)
-        else:
-            child.unlink()
-
-
-def _install_host_runtime(host_source_dir: Path, stage_plugin_dir: Path) -> None:
-    vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
-    vendor_root.mkdir(parents=True, exist_ok=True)
-
+def _install_vendor_dependencies(vendor_root: Path) -> None:
+    """Install extra runtime dependencies required by the host wheel offline bundle."""
     subprocess.run(  # noqa: S603
         [
             sys.executable,
@@ -143,21 +95,35 @@ def _install_host_runtime(host_source_dir: Path, stage_plugin_dir: Path) -> None
             "--upgrade",
             "--target",
             str(vendor_root),
-            str(host_source_dir),
+            *PYTHON_RUNTIME_DEPENDENCIES,
         ],
         check=True,
     )
 
-    controller_path = vendor_root / "controller.py"
-    if not controller_path.is_file():
-        source_controller = host_source_dir / "controller.py"
-        if not source_controller.is_file():
-            raise RuntimeError("RaceLink_Host controller.py is missing")
-        shutil.copy2(source_controller, controller_path)
 
+def _prune_vendor_runtime(vendor_root: Path) -> None:
+    """Keep only offline-required runtime pieces in the vendored site-packages."""
+    for child in vendor_root.iterdir():
+        if child.name in {"controller.py", "racelink", "serial"}:
+            continue
+        if any(child.name.startswith(prefix) for prefix in VENDORED_DISTINFO_PREFIXES):
+            continue
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+    build_backend = vendor_root / "racelink" / "_build_backend.py"
+    if build_backend.is_file():
+        build_backend.unlink()
+
+
+def _install_host_runtime(host_wheel_path: Path, stage_plugin_dir: Path) -> None:
+    vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
+    vendor_root.mkdir(parents=True, exist_ok=True)
+    _extract_host_wheel(host_wheel_path, vendor_root)
+    _install_vendor_dependencies(vendor_root)
     _prune_vendor_runtime(vendor_root)
-    _merge_installed_host_package(vendor_root, stage_plugin_dir)
-    _copy_host_assets(host_source_dir, stage_plugin_dir)
 
 
 def _patch_manifest(stage_plugin_dir: Path) -> dict[str, object]:
@@ -202,15 +168,19 @@ def _validate_vendor_runtime(vendor_root: Path) -> None:
         raise RuntimeError("Bundled controller.py is missing from offline artifact")
     if not (vendor_root / "serial").is_dir():
         raise RuntimeError("Bundled pyserial runtime is missing from offline artifact")
-    if (vendor_root / "racelink").exists():
-        raise RuntimeError(
-            "Nested vendored racelink package should not remain in vendor"
-        )
+
+    racelink_package_dir = vendor_root / "racelink"
+    if not racelink_package_dir.is_dir():
+        raise RuntimeError("Bundled racelink package is missing from offline artifact")
+    if not (racelink_package_dir / "app.py").is_file():
+        raise RuntimeError("Bundled host app.py is missing from vendor artifact")
+    if not (racelink_package_dir / "web" / "__init__.py").is_file():
+        raise RuntimeError("Bundled host web package is missing from vendor artifact")
 
     unexpected_vendor_children = sorted(
         child.name
         for child in vendor_root.iterdir()
-        if child.name not in VENDORED_RUNTIME_KEEP
+        if child.name not in {"controller.py", "racelink", "serial"}
         and not any(
             child.name.startswith(prefix) for prefix in VENDORED_DISTINFO_PREFIXES
         )
@@ -233,8 +203,6 @@ def _validate_stage(stage_root: Path) -> None:
         raise RuntimeError(message)
 
     vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
-    if not (stage_plugin_dir / "app.py").is_file():
-        raise RuntimeError("Bundled host app.py is missing from plugin root")
     _validate_vendor_runtime(vendor_root)
 
     custom_plugins_root = archive_root / "custom_plugins"
@@ -242,10 +210,6 @@ def _validate_stage(stage_root: Path) -> None:
     sys.path.insert(0, str(vendor_root))
     created_stub_modules = _install_rotorhazard_stubs()
     try:
-        importlib.import_module("controller")
-        importlib.import_module("racelink.app")
-        importlib.import_module("racelink.web")
-
         plugins_parent = types.ModuleType("plugins")
         plugins_parent.__path__ = [str(archive_root / "custom_plugins")]
         sys.modules["plugins"] = plugins_parent
@@ -263,6 +227,10 @@ def _validate_stage(stage_root: Path) -> None:
         spec.loader.exec_module(module)
         if not hasattr(module, "initialize"):
             raise RuntimeError("Staged plugin package does not expose initialize()")
+
+        importlib.import_module("controller")
+        importlib.import_module("racelink.app")
+        importlib.import_module("racelink.web")
     finally:
         if sys.path and sys.path[0] == str(vendor_root):
             sys.path.pop(0)
@@ -383,7 +351,7 @@ def _install_rotorhazard_stubs() -> list[str]:
 
 def build_offline_release(
     *,
-    host_source_dir: Path,
+    host_wheel_path: Path,
     output_dir: Path,
     release_tag: str,
 ) -> Path:
@@ -402,7 +370,7 @@ def build_offline_release(
         source_path = _repo_root() / root_file
         if source_path.is_file():
             shutil.copy2(source_path, archive_root / root_file)
-    _install_host_runtime(host_source_dir, stage_plugin_dir)
+    _install_host_runtime(host_wheel_path, stage_plugin_dir)
     _validate_stage(stage_root)
 
     zip_path = output_dir / _bundle_name(manifest, release_tag)
@@ -416,7 +384,7 @@ def main() -> int:
     """Run the offline bundle builder from the command line."""
     args = _parse_args()
     zip_path = build_offline_release(
-        host_source_dir=args.host_source.resolve(),
+        host_wheel_path=args.host_wheel.resolve(),
         output_dir=args.output_dir.resolve(),
         release_tag=args.release_tag,
     )

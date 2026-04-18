@@ -18,15 +18,39 @@ def _ensure_package_alias() -> None:
     sys.modules.setdefault("racelink", module)
 
 
-def _bootstrap_vendor_path() -> None:
-    """Expose bundled host dependencies when the offline release is installed."""
-    vendor_path = Path(__file__).resolve().parent / "vendor" / "site-packages"
-    if not vendor_path.is_dir():
+def _append_host_package_path(candidate_root: Path) -> None:
+    """Extend the composite racelink package path with one host package location."""
+    module = sys.modules[__name__]
+    package_path = candidate_root / "racelink"
+    if not package_path.is_dir():
         return
 
-    vendor_path_str = str(vendor_path)
-    if vendor_path_str not in sys.path:
-        sys.path.insert(0, vendor_path_str)
+    module_paths = list(getattr(module, "__path__", []))
+    candidate = str(package_path)
+    if candidate not in module_paths:
+        module_paths.append(candidate)
+        module.__path__ = module_paths  # type: ignore[attr-defined]
+
+
+def _bootstrap_vendor_path() -> None:
+    """Expose bundled or installed host dependencies under the shared racelink package."""
+    package_dir = Path(__file__).resolve().parent
+    vendor_path = package_dir / "vendor" / "site-packages"
+
+    if vendor_path.is_dir():
+        vendor_path_str = str(vendor_path)
+        if vendor_path_str not in sys.path:
+            sys.path.insert(0, vendor_path_str)
+        _append_host_package_path(vendor_path)
+
+    for sys_path_entry in sys.path:
+        try:
+            entry_path = Path(sys_path_entry).resolve()
+        except OSError:
+            continue
+        if entry_path == package_dir:
+            continue
+        _append_host_package_path(entry_path)
 
 
 _ensure_package_alias()

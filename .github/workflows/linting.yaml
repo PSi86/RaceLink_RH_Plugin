@@ -11,6 +11,21 @@ env:
   DEFAULT_PYTHON: "3.13"
 
 jobs:
+  dependency-sync:
+    name: Dependency sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: â¤µï¸ Check out code from GitHub
+        uses: actions/checkout@v6.0.2
+      - name: ðŸ— Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+      - name: ðŸš€ Verify generated dependency files are in sync
+        run: |
+          python scripts/sync_racelink_host_dependency.py --check
+          git diff --exit-code -- pyproject.toml custom_plugins/racelink/manifest.json README.md docs/manifest-dependency-format.md
+
   ruff:
     name: Ruff
     runs-on: ubuntu-latest

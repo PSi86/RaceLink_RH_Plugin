@@ -8,6 +8,6 @@
   "required_rhapi_version": "1.3",
   "version": "0.1.7-beta",
   "dependencies": [
-    "git+https://github.com/PSi86/RaceLink_Host.git@refactoring_ng_3"
+    "racelink-host==0.1.0"
   ]
 }

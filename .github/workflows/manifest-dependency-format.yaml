@@ -1,0 +1,89 @@
+---
+name: Manifest Dependency Format
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/manifest-dependency-format.yaml
+      - custom_plugins/racelink/manifest.json
+      - docs/manifest-dependency-format.md
+      - scripts/verify_manifest_dependency_formats.py
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/manifest-dependency-format.yaml
+      - custom_plugins/racelink/manifest.json
+      - docs/manifest-dependency-format.md
+      - scripts/verify_manifest_dependency_formats.py
+
+jobs:
+  spike:
+    name: ${{ matrix.case.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - name: current_git_url
+            dependency: git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0
+            expected_outcome: success
+          - name: exact_version_specifier
+            dependency: racelink-host==0.1.0
+            expected_outcome: success
+          - name: pep508_direct_wheel
+            dependency: racelink-host @ https://example.invalid/racelink_host-1.2.3-py3-none-any.whl
+            expected_outcome: failure
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Apply dependency candidate to manifest
+        env:
+          DEPENDENCY: ${{ matrix.case.dependency }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_path = Path("custom_plugins/racelink/manifest.json")
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          manifest["dependencies"] = [os.environ["DEPENDENCY"]]
+          manifest_path.write_text(
+              json.dumps(manifest, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Run RHFest validation
+        id: rhfest
+        continue-on-error: true
+        uses: docker://ghcr.io/rotorhazard/rhfest-action:v3
+
+      - name: Assert expected RHFest result
+        env:
+          ACTUAL_OUTCOME: ${{ steps.rhfest.outcome }}
+          EXPECTED_OUTCOME: ${{ matrix.case.expected_outcome }}
+        run: |
+          echo "Actual:   ${ACTUAL_OUTCOME}"
+          echo "Expected: ${EXPECTED_OUTCOME}"
+          test "${ACTUAL_OUTCOME}" = "${EXPECTED_OUTCOME}"
+
+  local-script:
+    name: Local spike script
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Run local dependency format check
+        run: python scripts/verify_manifest_dependency_formats.py
