@@ -15,13 +15,13 @@ jobs:
     name: Dependency sync
     runs-on: ubuntu-latest
     steps:
-      - name: â¤µï¸ Check out code from GitHub
+      - name: Check out code
         uses: actions/checkout@v6.0.2
-      - name: ðŸ— Set up Python
+      - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
-      - name: ðŸš€ Verify generated dependency files are in sync
+      - name: Verify generated dependency files are in sync
         run: |
           python scripts/sync_racelink_host_dependency.py --check
           git diff --exit-code -- pyproject.toml custom_plugins/racelink/manifest.json README.md docs/manifest-dependency-format.md
@@ -30,44 +30,44 @@ jobs:
     name: Ruff
     runs-on: ubuntu-latest
     steps:
-      - name: ⤵️ Check out code from GitHub
+      - name: Check out code
         uses: actions/checkout@v6.0.2
-      - name: 🏗 Set up UV
+      - name: Set up uv
         uses: astral-sh/setup-uv@v8.0.0
         with:
           version: "latest"
           python-version: ${{ env.DEFAULT_PYTHON }}
           enable-cache: true
-      - name: 🏗 Install project dependencies
+      - name: Install project dependencies
         run: uv sync --all-extras --dev
-      - name: 🚀 Run ruff linter
+      - name: Run ruff linter
         run: uv run ruff check --output-format=github .
-      - name: 🚀 Run ruff formatter
+      - name: Run ruff formatter
         run: uv run ruff format --check .
 
   pre-commit-hooks:
     name: Pre-commit hooks
     runs-on: ubuntu-latest
     steps:
-      - name: ⤵️ Check out code from GitHub
+      - name: Check out code
         uses: actions/checkout@v6.0.2
-      - name: 🏗 Set up UV
+      - name: Set up uv
         uses: astral-sh/setup-uv@v8.0.0
         with:
           version: "latest"
           python-version: ${{ env.DEFAULT_PYTHON }}
           enable-cache: true
-      - name: 🏗 Install project dependencies
+      - name: Install project dependencies
         run: uv sync --all-extras --dev
-      - name: 🚀 Check Python AST
+      - name: Check Python AST
         run: uv run pre-commit run check-ast --all-files
-      - name: 🚀 Check for case conflicts
+      - name: Check for case conflicts
         run: uv run pre-commit run check-case-conflict --all-files
-      - name: 🚀 Check docstring is first
+      - name: Check docstring is first
         run: uv run pre-commit run check-docstring-first --all-files
-      - name: 🚀 Detect Private Keys
+      - name: Detect private keys
         run: uv run pre-commit run detect-private-key --all-files
-      - name: 🚀 Check End of Files
+      - name: Check end of files
         run: uv run pre-commit run end-of-file-fixer --all-files
-      - name: 🚀 Trim Trailing Whitespace
+      - name: Trim trailing whitespace
         run: uv run pre-commit run trailing-whitespace --all-files

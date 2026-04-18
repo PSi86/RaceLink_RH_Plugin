@@ -102,12 +102,13 @@ Use the release ZIP when the target RotorHazard system must install without inte
 
 ## Release Process
 
-The release workflow is designed so a maintainer can cut a release from this repository without manual file editing.
+The release workflow now follows the same shape as `RaceLink_Host`: the release build runs from a git tag.
 
 1. Make sure the pinned host version in `build/deps.json` already points to a published `RaceLink_Host` release.
-2. Run the normal repo checks locally if you want a preflight: `py scripts/sync_racelink_host_dependency.py --check` and `py scripts/verify_manifest_dependency_formats.py`.
-3. Trigger the GitHub Actions release workflow with the target branch and optional plugin version override.
-4. The workflow syncs generated metadata, runs the release validation steps, creates the plugin tag, downloads the matching host wheel, builds the offline ZIP, and publishes the GitHub release.
+2. Update `custom_plugins/racelink/manifest.json` to the plugin version you want to ship and commit that change.
+3. Run the normal repo checks locally if you want a preflight: `py scripts/sync_racelink_host_dependency.py --check` and `py scripts/verify_manifest_dependency_formats.py`.
+4. Create a tag `v<plugin-version>` and push it, or create the release from the GitHub web UI using that tag.
+5. The release workflow validates the tag against the manifest version, checks online metadata, runs RHFest, downloads the matching host wheel, builds the offline ZIP, and publishes or updates the GitHub release assets.
 
 The short maintainer playbook lives in [docs/release-playbook.md](docs/release-playbook.md).
 

@@ -7,15 +7,14 @@ on:
       - main
   pull_request:
   schedule:
-    - cron: "0 0 * * *" # Every day at midnight
+    - cron: "0 0 * * *"
 
 jobs:
   validation:
     name: Validation
     runs-on: ubuntu-latest
     steps:
-      - name: ⤵️ Check out code from GitHub
+      - name: Check out code
         uses: actions/checkout@v6.0.2
-
-      - name: 🚀 Run RHFest validation
-        uses: docker://ghcr.io/rotorhazard/rhfest-action:latest
+      - name: Run RHFest validation
+        uses: docker://ghcr.io/rotorhazard/rhfest-action:v3

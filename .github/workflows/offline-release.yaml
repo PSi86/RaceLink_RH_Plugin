@@ -2,21 +2,22 @@
 name: Release Plugin Distribution
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
-      version:
-        description: "Optional release version override. Leave empty to auto-increment."
-        required: false
-        default: ""
-        type: string
-      target_branch:
-        description: "Branch to update before tagging"
+      target_tag:
+        description: "Existing git tag to build and publish"
         required: true
-        default: "main"
+        default: ""
         type: string
 
 env:
   DEFAULT_PYTHON: "3.13"
+
+permissions:
+  contents: write
 
 jobs:
   release-verify:
@@ -27,12 +28,33 @@ jobs:
       - name: Check out plugin repository
         uses: actions/checkout@v6.0.2
         with:
-          ref: ${{ inputs.target_branch }}
+          ref: ${{ inputs.target_tag || github.ref_name }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Verify tag matches plugin manifest version
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag_version="${{ inputs.target_tag }}"
+            tag_version="${tag_version#v}"
+          fi
+          manifest_version="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("custom_plugins/racelink/manifest.json").read_text(encoding="utf-8"))
+          print(manifest["version"])
+          PY
+          )"
+          if [ "$tag_version" != "$manifest_version" ]; then
+            echo "Tag version $tag_version does not match manifest version $manifest_version"
+            exit 1
+          fi
 
       - name: Verify generated online metadata
         run: python scripts/sync_racelink_host_dependency.py --check
@@ -46,72 +68,27 @@ jobs:
   release-publish:
     name: Release Publish
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     needs: release-verify
 
     steps:
       - name: Check out plugin repository
         uses: actions/checkout@v6.0.2
         with:
-          ref: ${{ inputs.target_branch }}
+          ref: ${{ inputs.target_tag || github.ref_name }}
           fetch-depth: 0
-          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
 
-      - name: Set up Git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Sync generated dependency files
-        run: python scripts/sync_racelink_host_dependency.py
-
-      - name: Read RaceLink_Host checkout ref
+      - name: Read RaceLink_Host release metadata
         id: host_dependency
         run: |
           ref="$(python scripts/sync_racelink_host_dependency.py --print checkout-ref)"
           wheel="$(python scripts/sync_racelink_host_dependency.py --print host-wheel-filename)"
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
           echo "wheel=${wheel}" >> "$GITHUB_OUTPUT"
-
-      - name: Bump plugin manifest version
-        id: manifest_version
-        run: |
-          version="$(python scripts/bump_manifest_version.py --version "${{ inputs.version }}")"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
-
-      - name: Fail if tag or release already exists
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if git ls-remote --tags origin "${{ steps.manifest_version.outputs.tag }}" | grep -q "${{ steps.manifest_version.outputs.tag }}"; then
-            echo "Tag ${{ steps.manifest_version.outputs.tag }} already exists on origin"
-            exit 1
-          fi
-          if gh release view "${{ steps.manifest_version.outputs.tag }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Release ${{ steps.manifest_version.outputs.tag }} already exists"
-            exit 1
-          fi
-
-      - name: Commit version bump
-        run: |
-          git add build/deps.json pyproject.toml custom_plugins/racelink/manifest.json README.md docs/manifest-dependency-format.md
-          if git diff --cached --quiet; then
-            echo "Manifest version was already set to ${{ steps.manifest_version.outputs.version }}"
-            exit 1
-          fi
-          git commit -m "Release v${{ steps.manifest_version.outputs.version }}"
-
-      - name: Create and push release tag
-        run: |
-          git tag "${{ steps.manifest_version.outputs.tag }}"
-          git push origin "HEAD:${{ inputs.target_branch }}" --follow-tags
 
       - name: Download RaceLink_Host release wheel
         env:
@@ -127,10 +104,14 @@ jobs:
         id: build_bundle
         shell: bash
         run: |
+          release_tag="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            release_tag="${{ inputs.target_tag }}"
+          fi
           python scripts/build_offline_release.py \
             --host-wheel "external/RaceLink_Host/${{ steps.host_dependency.outputs.wheel }}" \
             --output-dir dist \
-            --release-tag "${{ steps.manifest_version.outputs.tag }}" | tee /tmp/offline_bundle_path.txt
+            --release-tag "${release_tag}" | tee /tmp/offline_bundle_path.txt
           echo "zip_path=$(tail -n 1 /tmp/offline_bundle_path.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
@@ -139,10 +120,9 @@ jobs:
           name: racelink-rh-plugin-offline
           path: ${{ steps.build_bundle.outputs.zip_path }}
 
-      - name: Create GitHub release and attach ZIP
+      - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.manifest_version.outputs.tag }}
-          target_commitish: ${{ inputs.target_branch }}
+          tag_name: ${{ inputs.target_tag || github.ref_name }}
           generate_release_notes: true
           files: ${{ steps.build_bundle.outputs.zip_path }}
