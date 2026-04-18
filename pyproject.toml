@@ -1,5 +1,5 @@
 [project]
-name = "racelink-rh-plugin"
+name = "racelink_rh_plugin"
 version = "0.1.0"
 description = "RotorHazard adapter plugin for RaceLink."
 readme = "README.md"

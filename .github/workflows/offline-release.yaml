@@ -180,7 +180,7 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: racelink-rh-plugin-offline
+          name: racelink_rh_plugin_offline
           path: ${{ steps.build_bundle.outputs.zip_path }}
 
       - name: Publish GitHub release

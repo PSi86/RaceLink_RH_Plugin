@@ -71,7 +71,7 @@ def _github_request(url: str) -> urllib.request.Request:
         url=url,
         headers={
             "Accept": "application/vnd.github+json",
-            "User-Agent": "RaceLink_RH-plugin-release-resolver",
+            "User-Agent": "RaceLink_RH_Plugin-release-resolver",
         },
     )
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
