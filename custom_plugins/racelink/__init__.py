@@ -33,7 +33,7 @@ def _append_host_package_path(candidate_root: Path) -> None:
 
 
 def _bootstrap_vendor_path() -> None:
-    """Expose bundled or installed host dependencies under the shared racelink package."""
+    """Expose bundled or installed host dependencies under the shared package."""
     package_dir = Path(__file__).resolve().parent
     vendor_path = package_dir / "vendor" / "site-packages"
 

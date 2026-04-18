@@ -17,12 +17,18 @@ VERSION_PATTERN = re.compile(r"^v?(?P<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Resolve the RaceLink_Host release version to use for a plugin release."
+        description=(
+            "Resolve the RaceLink_Host release version "
+            "to use for a plugin release."
+        )
     )
     parser.add_argument(
         "--host-version",
         default="",
-        help="Optional explicit host version override. Accepts forms like 0.1.0 or v0.1.0.",
+        help=(
+            "Optional explicit host version override. "
+            "Accepts forms like 0.1.0 or v0.1.0."
+        ),
     )
     parser.add_argument(
         "--print",
@@ -50,7 +56,8 @@ def _load_config() -> dict[str, str]:
 def _normalize_version(raw_version: str) -> str:
     match = VERSION_PATTERN.fullmatch(str(raw_version).strip())
     if match is None:
-        raise ValueError(f"Invalid host version: {raw_version}")
+        message = f"Invalid host version: {raw_version}"
+        raise ValueError(message)
     return match.group("version")
 
 

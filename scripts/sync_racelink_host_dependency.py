@@ -21,7 +21,8 @@ README_SCOPE_PATTERN = re.compile(
     r"- `uv` dependency on the immutable `racelink-host` GitHub release wheel for .*"
 )
 README_INSTALL_PATTERN = re.compile(
-    r"installs the .* `racelink-host` wheel from the matching `RaceLink_Host` GitHub release\."
+    r"installs the .* `racelink-host` wheel from the matching "
+    r"`RaceLink_Host` GitHub release\."
 )
 DOCS_DECISION_PATTERN = re.compile(r"`racelink-host==[^`]+`")
 DOCS_GIT_ROW_PATTERN = re.compile(
@@ -42,22 +43,27 @@ class HostDependency:
 
     @property
     def manifest_dependency(self) -> str:
+        """Return the manifest dependency string for the selected host version."""
         return f"{self.package_name}=={self.version}"
 
     @property
     def pyproject_dependency(self) -> str:
+        """Return the editable development dependency entry for pyproject."""
         return f"{self.package_name} @ {self.host_wheel_url}"
 
     @property
     def host_release_tag(self) -> str:
+        """Return the Git tag name for the selected host version."""
         return f"v{self.version}"
 
     @property
     def host_wheel_filename(self) -> str:
+        """Return the wheel filename for the selected host version."""
         return f"racelink_host-{self.version}-py3-none-any.whl"
 
     @property
     def host_wheel_url(self) -> str:
+        """Return the immutable GitHub release wheel URL for the host version."""
         return (
             f"https://github.com/{self.github_repository}/releases/download/"
             f"{self.host_release_tag}/{self.host_wheel_filename}"
@@ -79,7 +85,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--host-version",
         default="",
-        help="Optional explicit host version override used for rendering generated files.",
+        help=(
+            "Optional explicit host version override "
+            "used for rendering generated files."
+        ),
     )
     parser.add_argument(
         "--print",
@@ -135,7 +144,8 @@ def _render_readme(host: HostDependency) -> str:
     )
     return README_INSTALL_PATTERN.sub(
         f"installs the repo-pinned `racelink-host` wheel from the matching "
-        f"`RaceLink_Host` GitHub release for development baseline `{host.version}`.",
+        "`RaceLink_Host` GitHub release for development baseline "
+        f"`{host.version}`.",
         updated,
         count=1,
     )
@@ -154,7 +164,8 @@ def _render_docs(host: HostDependency) -> str:
         count=1,
     )
     return DOCS_SPECIFIER_ROW_PATTERN.sub(
-        f"`{host.manifest_dependency}` | pass | accepted and chosen for online installations",
+        f"`{host.manifest_dependency}` | pass | accepted and chosen "
+        "for online installations",
         updated,
         count=1,
     )

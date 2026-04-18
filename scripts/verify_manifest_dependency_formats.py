@@ -42,19 +42,30 @@ CASES = (
         "name": "pep508_direct_wheel",
         "dependency": PEP508_DIRECT_WHEEL,
         "expected_valid": False,
-        "decision": "Rejected because RHFest does not accept PEP-508 direct references here.",
+        "decision": (
+            "Rejected because RHFest does not accept "
+            "PEP-508 direct references here."
+        ),
     },
 )
 
 
 def rhfest_accepts_dependency(dependency: str) -> bool:
     """Return whether the given dependency matches RHFest's current schema."""
-    return bool(PYPI_PACKAGE_REGEX.fullmatch(dependency) or GIT_URL_REGEX.fullmatch(dependency))
+    return bool(
+        PYPI_PACKAGE_REGEX.fullmatch(dependency)
+        or GIT_URL_REGEX.fullmatch(dependency)
+    )
 
 
 def load_manifest(manifest_path: Path) -> dict:
     """Load the current plugin manifest."""
     return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def _write_line(message: str) -> None:
+    """Write one report line to stdout."""
+    sys.stdout.write(f"{message}\n")
 
 
 def main() -> int:
@@ -71,27 +82,39 @@ def main() -> int:
     current_host = _load_dependency()
     manifest = load_manifest(args.manifest)
     current_dependencies = manifest.get("dependencies", [])
-    current_dependency = current_dependencies[0] if current_dependencies else "<missing>"
+    current_dependency = (
+        current_dependencies[0] if current_dependencies else "<missing>"
+    )
 
-    print(f"Manifest: {args.manifest}")
-    print(f"Current dependency[0]: {current_dependency}")
-    print("RHFest dependency format spike:")
+    _write_line(f"Manifest: {args.manifest}")
+    _write_line(f"Current dependency[0]: {current_dependency}")
+    _write_line("RHFest dependency format spike:")
 
     failed = False
     for case in CASES:
-        dependency = current_host.manifest_dependency if case["name"] == "exact_version_specifier" else case["dependency"]
+        dependency = (
+            current_host.manifest_dependency
+            if case["name"] == "exact_version_specifier"
+            else case["dependency"]
+        )
         accepted = rhfest_accepts_dependency(dependency)
         status = "PASS" if accepted == case["expected_valid"] else "FAIL"
-        print(
+        _write_line(
             f"- {status} {case['name']}: accepted={accepted} "
             f"expected={case['expected_valid']} value={dependency}"
         )
-        print(f"  {case['decision']}")
+        _write_line(f"  {case['decision']}")
         if status == "FAIL":
             failed = True
 
-    print(f"Decision: use `{current_host.manifest_dependency}` for online installations.")
-    print("Direct wheel references stay unsupported until RHFest accepts PEP-508 URLs.")
+    _write_line(
+        f"Decision: use `{current_host.manifest_dependency}` "
+        "for online installations."
+    )
+    _write_line(
+        "Direct wheel references stay unsupported until RHFest "
+        "accepts PEP-508 URLs."
+    )
     return 1 if failed else 0
 
 
