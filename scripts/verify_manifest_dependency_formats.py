@@ -18,7 +18,7 @@ PYPI_PACKAGE_REGEX = re.compile(
 )
 GIT_URL_REGEX = re.compile(r"^git\+https://[^\s]+$")
 
-DEFAULT_MANIFEST = Path("custom_plugins/racelink/manifest.json")
+DEFAULT_MANIFEST = Path("custom_plugins/racelink_rh_plugin/manifest.json")
 GIT_URL_REFERENCE = "git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0"
 PEP508_DIRECT_WHEEL = (
     "racelink-host @ https://example.invalid/racelink_host-1.2.3-py3-none-any.whl"

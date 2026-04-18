@@ -6,7 +6,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/manifest-dependency-format.yaml
-      - custom_plugins/racelink/manifest.json
+      - custom_plugins/racelink_rh_plugin/manifest.json
       - docs/manifest-dependency-format.md
       - scripts/verify_manifest_dependency_formats.py
   push:
@@ -14,7 +14,7 @@ on:
       - main
     paths:
       - .github/workflows/manifest-dependency-format.yaml
-      - custom_plugins/racelink/manifest.json
+      - custom_plugins/racelink_rh_plugin/manifest.json
       - docs/manifest-dependency-format.md
       - scripts/verify_manifest_dependency_formats.py
 
@@ -49,7 +49,7 @@ jobs:
           import os
           from pathlib import Path
 
-          manifest_path = Path("custom_plugins/racelink/manifest.json")
+          manifest_path = Path("custom_plugins/racelink_rh_plugin/manifest.json")
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           manifest["dependencies"] = [os.environ["DEPENDENCY"]]
           manifest_path.write_text(

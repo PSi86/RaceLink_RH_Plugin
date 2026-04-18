@@ -7,12 +7,12 @@ This repository contains the RotorHazard adapter plugin for RaceLink.
 
 The RaceLink web UI and the RaceLink core are provided by `RaceLink_Host`. This repository only contains the RotorHazard-specific integration layer and imports the host runtime from the installed `RaceLink_Host` package.
 
-The dependency-format decision for `custom_plugins/racelink/manifest.json` is documented in [docs/manifest-dependency-format.md](docs/manifest-dependency-format.md).
+The dependency-format decision for `custom_plugins/racelink_rh_plugin/manifest.json` is documented in [docs/manifest-dependency-format.md](docs/manifest-dependency-format.md).
 
 ## Scope
 
-- RotorHazard adapter package under `custom_plugins/racelink`
-- RotorHazard-specific plugin bootstrap and RH bridges under `custom_plugins/racelink/plugin`
+- RotorHazard adapter package under `custom_plugins/racelink_rh_plugin`
+- RotorHazard-specific plugin bootstrap and RH bridges under `custom_plugins/racelink_rh_plugin/plugin`
 - Plugin manifest for RotorHazard and RHFest validation
 - Development tooling based on [uv] and [pre-commit]
 - `uv` dependency on the immutable `racelink-host` GitHub release wheel for the repo-pinned development baseline `0.1.0`
@@ -22,7 +22,7 @@ The dependency-format decision for `custom_plugins/racelink/manifest.json` is do
 RaceLink has two supported distribution modes:
 
 - Online installation: RotorHazard installs this plugin and resolves the exact `racelink-host==X.Y.Z` runtime dependency from plugin metadata.
-- Offline installation: a release ZIP bundles this plugin together with the same resolved `racelink-host` runtime inside `custom_plugins/racelink/vendor/site-packages`.
+- Offline installation: a release ZIP bundles this plugin together with the same resolved `racelink-host` runtime inside `custom_plugins/racelink_rh_plugin/vendor/site-packages`.
 
 That means both installation modes use the same host version for a given release. The difference is only whether the host package is fetched during installation or vendored into the release ZIP.
 
@@ -81,7 +81,7 @@ uv run pre-commit run
 
 Use the repository metadata-driven installation when the target RotorHazard system has internet access.
 
-- `custom_plugins/racelink/manifest.json` declares the exact `racelink-host==X.Y.Z` version selected for that release
+- `custom_plugins/racelink_rh_plugin/manifest.json` declares the exact `racelink-host==X.Y.Z` version selected for that release
 - `pyproject.toml` uses the same selected host version for local development, but resolves it from the immutable GitHub release wheel URL because `racelink-host` is not published on PyPI
 - RHFest validates the manifest format used for the online dependency
 
@@ -89,13 +89,13 @@ Use the repository metadata-driven installation when the target RotorHazard syst
 
 Use the release ZIP when the target RotorHazard system must install without internet access.
 
-- The ZIP contains `custom_plugins/racelink/vendor/site-packages`
+- The ZIP contains `custom_plugins/racelink_rh_plugin/vendor/site-packages`
 - That vendored runtime contains the selected `racelink-host` wheel contents plus runtime dependencies such as `pyserial`
 - The offline ZIP clears manifest dependencies so RotorHazard does not try to fetch packages during installation
 
 ## Version Mapping
 
-- Plugin version: stored in `custom_plugins/racelink/manifest.json` and bumped per plugin release
+- Plugin version: stored in `custom_plugins/racelink_rh_plugin/manifest.json` and bumped per plugin release
 - Host development baseline: stored once in `build/deps.json`
 - Release builds default to the latest published `RaceLink_Host` release
 - Release builds can optionally override the host version manually in the workflow input

@@ -59,7 +59,7 @@ _bootstrap_vendor_path()
 
 def initialize(*args: object, **kwargs: object) -> object:
     """Load the RotorHazard adapter bootstrap lazily for plugin initialization."""
-    bootstrap_module = importlib.import_module("racelink.plugin.bootstrap")
+    bootstrap_module = importlib.import_module("racelink_rh_plugin.plugin.bootstrap")
     return bootstrap_module.initialize(*args, **kwargs)
 
 

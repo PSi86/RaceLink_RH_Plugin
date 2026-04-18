@@ -6,9 +6,8 @@ import logging
 from typing import Any
 
 from EventActions import ActionEffect
-from RHUI import UIField, UIFieldSelectOption, UIFieldType
-
 from racelink.domain import RL_FLAG_HAS_BRI, RL_FLAG_POWER_ON, get_specials_config
+from RHUI import UIField, UIFieldSelectOption, UIFieldType
 
 logger = logging.getLogger(__name__)
 

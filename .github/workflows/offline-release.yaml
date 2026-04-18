@@ -144,7 +144,7 @@ jobs:
       - name: Commit release metadata
         if: steps.release_inputs.outputs.create_release == 'true'
         run: |
-          git add build/deps.json pyproject.toml custom_plugins/racelink/manifest.json README.md docs/manifest-dependency-format.md
+          git add build/deps.json pyproject.toml custom_plugins/racelink_rh_plugin/manifest.json README.md docs/manifest-dependency-format.md
           if git diff --cached --quiet; then
             echo "Release metadata did not change"
           else

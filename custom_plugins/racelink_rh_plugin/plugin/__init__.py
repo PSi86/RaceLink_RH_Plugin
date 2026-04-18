@@ -1,5 +1,5 @@
 """RotorHazard-specific bootstrap package for the RaceLink plugin."""
 
-from racelink.plugin.bootstrap import initialize
+from racelink_rh_plugin.plugin.bootstrap import initialize
 
 __all__ = ["initialize"]

@@ -8,9 +8,8 @@ from typing import Any
 
 from data_export import DataExporter
 from data_import import DataImporter
-from RHUI import UIField, UIFieldType
-
 from racelink.state.persistence import dump_records
+from RHUI import UIField, UIFieldType
 
 logger = logging.getLogger(__name__)
 

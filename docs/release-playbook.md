@@ -44,4 +44,4 @@ This playbook is the shortest path for maintainers to publish a new `RaceLink_RH
 
 - If metadata sync fails, run `py scripts/sync_racelink_host_dependency.py` locally and commit the result.
 - If the host wheel download fails, verify the selected or latest `RaceLink_Host` release tag and wheel filename.
-- If RHFest fails, inspect `custom_plugins/racelink/manifest.json` and the dependency-format rules in `docs/manifest-dependency-format.md`.
+- If RHFest fails, inspect `custom_plugins/racelink_rh_plugin/manifest.json` and the dependency-format rules in `docs/manifest-dependency-format.md`.

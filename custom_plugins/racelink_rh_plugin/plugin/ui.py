@@ -9,9 +9,9 @@ from typing import Any
 
 from RHUI import UIField, UIFieldSelectOption, UIFieldType
 from racelink.domain import RL_DeviceGroup, get_dev_type_info, get_specials_config
-from racelink.plugin.actions import RotorHazardActionsMixin
-from racelink.plugin.dataio import RotorHazardDataIOMixin
-from racelink.plugin.source import RotorHazardSource
+from racelink_rh_plugin.plugin.actions import RotorHazardActionsMixin
+from racelink_rh_plugin.plugin.dataio import RotorHazardDataIOMixin
+from racelink_rh_plugin.plugin.source import RotorHazardSource
 
 logger = logging.getLogger(__name__)
 

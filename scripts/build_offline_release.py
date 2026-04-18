@@ -13,7 +13,7 @@ import types
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-PLUGIN_NAME = "racelink"
+PLUGIN_NAME = "racelink_rh_plugin"
 PLUGIN_RELATIVE_PATH = Path("custom_plugins") / PLUGIN_NAME
 VENDOR_RELATIVE_PATH = Path("vendor") / "site-packages"
 REPO_ROOT_FILES = ("README.md", "LICENSE")
@@ -217,14 +217,14 @@ def _validate_stage(stage_root: Path) -> None:
 
         plugin_init = stage_plugin_dir / "__init__.py"
         spec = importlib.util.spec_from_file_location(
-            "plugins.racelink",
+            "plugins.racelink_rh_plugin",
             plugin_init,
             submodule_search_locations=[str(stage_plugin_dir)],
         )
         if spec is None or spec.loader is None:
             raise RuntimeError("Unable to create import spec for staged plugin")
         module = importlib.util.module_from_spec(spec)
-        sys.modules["plugins.racelink"] = module
+        sys.modules["plugins.racelink_rh_plugin"] = module
         spec.loader.exec_module(module)
         if not hasattr(module, "initialize"):
             raise RuntimeError("Staged plugin package does not expose initialize()")
@@ -237,7 +237,11 @@ def _validate_stage(stage_root: Path) -> None:
             sys.path.pop(0)
         if sys.path and sys.path[0] == str(custom_plugins_root):
             sys.path.pop(0)
-        for module_name in ("plugins.racelink", "plugins", *created_stub_modules):
+        for module_name in (
+            "plugins.racelink_rh_plugin",
+            "plugins",
+            *created_stub_modules,
+        ):
             sys.modules.pop(module_name, None)
 
 

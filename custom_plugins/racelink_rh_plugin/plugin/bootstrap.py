@@ -10,7 +10,7 @@ from typing import Any
 from controller import RaceLink_Host
 from eventmanager import Evt
 
-from racelink.plugin.ui import RotorHazardUIAdapter
+from racelink_rh_plugin.plugin.ui import RotorHazardUIAdapter
 
 logger = logging.getLogger(__name__)
 

@@ -17,12 +17,13 @@ VERSION_PATTERN = re.compile(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Update custom_plugins/racelink/manifest.json with a release version."
+            "Update custom_plugins/racelink_rh_plugin/manifest.json "
+            "with a release version."
         ),
     )
     parser.add_argument(
         "--manifest",
-        default=Path("custom_plugins/racelink/manifest.json"),
+        default=Path("custom_plugins/racelink_rh_plugin/manifest.json"),
         type=Path,
         help="Path to the plugin manifest JSON file.",
     )

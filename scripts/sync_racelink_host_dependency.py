@@ -12,7 +12,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEPS_PATH = REPO_ROOT / "build" / "deps.json"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
-MANIFEST_PATH = REPO_ROOT / "custom_plugins" / "racelink" / "manifest.json"
+MANIFEST_PATH = REPO_ROOT / "custom_plugins" / "racelink_rh_plugin" / "manifest.json"
 README_PATH = REPO_ROOT / "README.md"
 DOCS_PATH = REPO_ROOT / "docs" / "manifest-dependency-format.md"
 
