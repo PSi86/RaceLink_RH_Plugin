@@ -1,6 +1,6 @@
 {
   "domain": "racelink-rh-plugin",
-  "name": "RaceLink",
+  "name": "RaceLink_RH-plugin",
   "author": "PSi86",
   "license": "MIT",
   "description": "RotorHazard adapter plugin for RaceLink. The RaceLink web UI and core services are provided by RaceLink_Host.",
