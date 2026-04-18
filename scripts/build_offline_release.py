@@ -79,7 +79,8 @@ def _copy_plugin_tree(source_dir: Path, stage_plugin_dir: Path) -> None:
 def _extract_host_wheel(host_wheel_path: Path, vendor_root: Path) -> None:
     """Extract the released host wheel into the vendored site-packages directory."""
     if host_wheel_path.suffix != ".whl":
-        raise RuntimeError(f"Host artifact is not a wheel: {host_wheel_path}")
+        message = f"Host artifact is not a wheel: {host_wheel_path}"
+        raise RuntimeError(message)
     with ZipFile(host_wheel_path) as archive:
         archive.extractall(vendor_root)
 

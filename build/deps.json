@@ -1,6 +1,8 @@
 {
   "racelink_host": {
     "package_name": "racelink-host",
-    "version": "0.1.0"
+    "github_repository": "PSi86/RaceLink_Host",
+    "release_selection": "latest",
+    "development_version": "0.1.0"
   }
 }

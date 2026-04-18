@@ -15,16 +15,16 @@ The dependency-format decision for `custom_plugins/racelink/manifest.json` is do
 - RotorHazard-specific plugin bootstrap and RH bridges under `custom_plugins/racelink/plugin`
 - Plugin manifest for RotorHazard and RHFest validation
 - Development tooling based on [uv] and [pre-commit]
-- `uv` dependency on the released `racelink-host==0.1.0` package
+- `uv` dependency on the immutable `racelink-host` GitHub release wheel for the repo-pinned development baseline `0.1.0`
 
 ## Distribution
 
 RaceLink has two supported distribution modes:
 
-- Online installation: RotorHazard installs this plugin and resolves the pinned `racelink-host==0.1.0` runtime dependency from package metadata.
-- Offline installation: a release ZIP bundles this plugin together with the same pinned `racelink-host==0.1.0` runtime inside `custom_plugins/racelink/vendor/site-packages`.
+- Online installation: RotorHazard installs this plugin and resolves the exact `racelink-host==X.Y.Z` runtime dependency from plugin metadata.
+- Offline installation: a release ZIP bundles this plugin together with the same resolved `racelink-host` runtime inside `custom_plugins/racelink/vendor/site-packages`.
 
-That means both installation modes use the same host version. The difference is only whether the host package is fetched during installation or vendored into the release ZIP.
+That means both installation modes use the same host version for a given release. The difference is only whether the host package is fetched during installation or vendored into the release ZIP.
 
 ## Architecture
 
@@ -49,7 +49,7 @@ You need the following tools:
 ### Installation
 
 1. Clone the repository
-2. Install the project dependencies with `uv`. This creates a virtual environment and installs the pinned `racelink-host==0.1.0` release.
+2. Install the project dependencies with `uv`. This creates a virtual environment and installs the repo-pinned `racelink-host` wheel from the matching `RaceLink_Host` GitHub release for development baseline `0.1.0`.
 
 ```bash
 uv sync
@@ -81,8 +81,8 @@ uv run pre-commit run
 
 Use the repository metadata-driven installation when the target RotorHazard system has internet access.
 
-- `custom_plugins/racelink/manifest.json` declares `racelink-host==0.1.0`
-- `pyproject.toml` uses the same pinned host version for local development
+- `custom_plugins/racelink/manifest.json` declares the exact `racelink-host==X.Y.Z` version selected for that release
+- `pyproject.toml` uses the same selected host version for local development, but resolves it from the immutable GitHub release wheel URL because `racelink-host` is not published on PyPI
 - RHFest validates the manifest format used for the online dependency
 
 ### Offline Installation
@@ -90,24 +90,29 @@ Use the repository metadata-driven installation when the target RotorHazard syst
 Use the release ZIP when the target RotorHazard system must install without internet access.
 
 - The ZIP contains `custom_plugins/racelink/vendor/site-packages`
-- That vendored runtime contains the `racelink-host==0.1.0` wheel contents plus runtime dependencies such as `pyserial`
+- That vendored runtime contains the selected `racelink-host` wheel contents plus runtime dependencies such as `pyserial`
 - The offline ZIP clears manifest dependencies so RotorHazard does not try to fetch packages during installation
 
 ## Version Mapping
 
 - Plugin version: stored in `custom_plugins/racelink/manifest.json` and bumped per plugin release
-- Host version: stored once in `build/deps.json`
-- Online install uses the host version from `build/deps.json`
-- Offline ZIP vendors the exact same host version from the matching `RaceLink_Host` release wheel
+- Host development baseline: stored once in `build/deps.json`
+- Release builds default to the latest published `RaceLink_Host` release
+- Release builds can optionally override the host version manually in the workflow input
+- Online install and offline ZIP both use the same resolved host version for that release
 
 ## Release Process
 
-The release workflow is designed so a maintainer can cut a release from this repository without manual file editing.
+The optimized release flow supports both the GitHub Actions UI and the GitHub Releases UI.
 
-1. Make sure the pinned host version in `build/deps.json` already points to a published `RaceLink_Host` release.
-2. Run the normal repo checks locally if you want a preflight: `py scripts/sync_racelink_host_dependency.py --check` and `py scripts/verify_manifest_dependency_formats.py`.
-3. Trigger the GitHub Actions release workflow with the target branch and optional plugin version override.
-4. The workflow syncs generated metadata, runs the release validation steps, creates the plugin tag, downloads the matching host wheel, builds the offline ZIP, and publishes the GitHub release.
+1. Recommended: trigger the release workflow from the GitHub Actions web UI.
+2. Choose the target branch and optionally set:
+   the plugin version override
+   a manual `RaceLink_Host` version override
+3. If no host version override is provided, the workflow automatically resolves the latest published `RaceLink_Host` release.
+4. The workflow syncs metadata, validates the online dependency shape, runs RHFest, bumps the plugin version, creates the release tag, downloads the resolved host wheel, builds the offline ZIP, and publishes the GitHub release.
+5. Alternative: publish a GitHub Release directly in the web UI. The same workflow also reacts to that release event and builds artifacts with the latest published `RaceLink_Host` release by default.
+6. Prefer the Actions UI path when you want the selected host version written back into the repository metadata. The GitHub Releases UI path is the convenience option for "build artifacts for this tag" and does not create a follow-up metadata commit.
 
 The short maintainer playbook lives in [docs/release-playbook.md](docs/release-playbook.md).
 

@@ -36,4 +36,5 @@ The spike verifies these cases:
 ## Consequence
 
 - Online installations use an exact version specifier.
+- Local and CI `uv sync` use the same pinned host version, but consume it through the immutable GitHub release wheel URL in `pyproject.toml`.
 - A direct wheel URL must not be used unless RHFest broadens its dependency validation rules.
