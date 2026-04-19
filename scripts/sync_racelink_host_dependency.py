@@ -24,12 +24,15 @@ README_INSTALL_PATTERN = re.compile(
     r"installs the .* `racelink-host` wheel from the matching "
     r"`RaceLink_Host` GitHub release\."
 )
-DOCS_DECISION_PATTERN = re.compile(r"`racelink-host==[^`]+`")
+DOCS_DECISION_PATTERN = re.compile(
+    r"(?<=For online installations, this repository uses:\n\n)`[^`]+`"
+)
 DOCS_GIT_ROW_PATTERN = re.compile(
     r"`git\+https://github\.com/PSi86/RaceLink_Host\.git@v[^`]+`"
 )
 DOCS_SPECIFIER_ROW_PATTERN = re.compile(
-    r"`racelink-host==[^`]+` \| pass \| accepted and chosen for online installations"
+    r"`racelink-host==[^`]+` \| pass \| accepted by RHFest, "
+    r"but not used for online installations"
 )
 
 
@@ -44,7 +47,10 @@ class HostDependency:
     @property
     def manifest_dependency(self) -> str:
         """Return the manifest dependency string for the selected host version."""
-        return f"{self.package_name}=={self.version}"
+        return (
+            f"git+https://github.com/{self.github_repository}.git@"
+            f"{self.host_release_tag}"
+        )
 
     @property
     def pyproject_dependency(self) -> str:
@@ -164,8 +170,8 @@ def _render_docs(host: HostDependency) -> str:
         count=1,
     )
     return DOCS_SPECIFIER_ROW_PATTERN.sub(
-        f"`{host.manifest_dependency}` | pass | accepted and chosen "
-        "for online installations",
+        f"`{host.package_name}=={host.version}` | pass | accepted and chosen "
+        "by RHFest, but not used for online installations",
         updated,
         count=1,
     )

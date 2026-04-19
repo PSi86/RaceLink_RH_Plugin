@@ -1,4 +1,4 @@
-<!-- PLUGIN BADGES -->
+﻿<!-- PLUGIN BADGES -->
 [![RHFest][rhfest-shield]][rhfest-url]
 
 # RaceLink_RH_Plugin
@@ -21,7 +21,7 @@ The dependency-format decision for `custom_plugins/racelink_rh_plugin/manifest.j
 
 RaceLink has two supported distribution modes:
 
-- Online installation: RotorHazard installs this plugin and resolves the exact `racelink-host==X.Y.Z` runtime dependency from plugin metadata.
+- Online installation: RotorHazard installs this plugin and resolves the exact `RaceLink_Host` runtime from an immutable Git tag declared in plugin metadata.
 - Offline installation: a release ZIP bundles this plugin together with the same resolved `racelink-host` runtime inside `custom_plugins/racelink_rh_plugin/vendor/site-packages`.
 
 That means both installation modes use the same host version for a given release. The difference is only whether the host package is fetched during installation or vendored into the release ZIP.
@@ -81,7 +81,7 @@ uv run pre-commit run
 
 Use the repository metadata-driven installation when the target RotorHazard system has internet access.
 
-- `custom_plugins/racelink_rh_plugin/manifest.json` declares the exact `racelink-host==X.Y.Z` version selected for that release
+- `custom_plugins/racelink_rh_plugin/manifest.json` declares the exact immutable `RaceLink_Host` Git tag selected for that release
 - `pyproject.toml` uses the same selected host version for local development, but resolves it from the immutable GitHub release wheel URL because `racelink-host` is not published on PyPI
 - RHFest validates the manifest format used for the online dependency
 
@@ -126,3 +126,4 @@ Distributed under the **MIT** License. See [`LICENSE`](LICENSE) for more informa
 
 [rhfest-shield]: https://github.com/PSi86/RaceLink_RH-plugin/actions/workflows/rhfest.yaml/badge.svg
 [rhfest-url]: https://github.com/PSi86/RaceLink_RH-plugin/actions/workflows/rhfest.yaml
+

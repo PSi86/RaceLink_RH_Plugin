@@ -1,10 +1,10 @@
-# Manifest Dependency Format Decision
+﻿# Manifest Dependency Format Decision
 
 ## Decision
 
 For online installations, this repository uses:
 
-`racelink-host==0.1.0`
+`git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0`
 
 Direct wheel references in PEP-508 form stay out of `manifest.json` for now.
 
@@ -29,12 +29,13 @@ The spike verifies these cases:
 
 | Candidate | Expected RHFest result | Outcome |
 | --- | --- | --- |
-| `git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0` | pass | accepted by current RHFest regex |
-| `racelink-host==0.1.0` | pass | accepted and chosen for online installations |
+| `git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0` | pass | accepted and chosen for online installations |
+| `racelink-host==0.1.0` | pass | accepted and chosen by RHFest, but not used for online installations |
 | `racelink-host @ https://example.invalid/racelink_host-1.2.3-py3-none-any.whl` | fail | rejected by RHFest |
 
 ## Consequence
 
-- Online installations use an exact version specifier.
+- Online installations use an immutable Git tag reference to the `RaceLink_Host` repository.
 - Local and CI `uv sync` use the same pinned host version, but consume it through the immutable GitHub release wheel URL in `pyproject.toml`.
 - A direct wheel URL must not be used unless RHFest broadens its dependency validation rules.
+

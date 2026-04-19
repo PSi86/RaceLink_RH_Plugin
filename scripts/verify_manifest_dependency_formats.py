@@ -27,15 +27,18 @@ PEP508_DIRECT_WHEEL = (
 CASES = (
     {
         "name": "current_git_url",
-        "dependency": GIT_URL_REFERENCE,
-        "expected_valid": True,
-        "decision": "Accepted by RHFest, but not used for online installs anymore.",
-    },
-    {
-        "name": "exact_version_specifier",
         "dependency": None,
         "expected_valid": True,
         "decision": "Chosen format for online host installation.",
+    },
+    {
+        "name": "exact_version_specifier",
+        "dependency": "racelink-host==0.1.0",
+        "expected_valid": True,
+        "decision": (
+            "Accepted by RHFest, but not used for online installs because "
+            "`racelink-host` is not published on a public package index."
+        ),
     },
     {
         "name": "pep508_direct_wheel",
@@ -91,7 +94,7 @@ def main() -> int:
     for case in CASES:
         dependency = (
             current_host.manifest_dependency
-            if case["name"] == "exact_version_specifier"
+            if case["name"] == "current_git_url"
             else case["dependency"]
         )
         accepted = rhfest_accepts_dependency(dependency)

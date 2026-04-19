@@ -9,6 +9,6 @@
   "required_rhapi_version": "1.4",
   "version": "0.2.6",
   "dependencies": [
-    "racelink-host==0.1.0"
+    "git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0"
   ]
 }
