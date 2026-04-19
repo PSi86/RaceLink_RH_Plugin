@@ -27,12 +27,13 @@ This playbook is the shortest path for maintainers to publish a new `RaceLink_RH
    run the manifest dependency spike
    run RHFest
    bump the plugin version
+   validate that `manifest.json` and the release tag match
+   commit the release metadata
    create and push the plugin tag
    download the resolved host wheel
    build the offline ZIP
    publish the GitHub release
-6. Alternative path: create a GitHub Release directly in the web UI. The same workflow also runs on `release.published` and builds artifacts with the latest published `RaceLink_Host` release.
-7. Prefer the Actions UI path when the selected host version should also be persisted back into repository metadata. The release-page path is intended as the convenience build path for an already chosen tag.
+6. Do not create releases directly in the GitHub Releases UI. That path is intentionally unsupported because it cannot update `manifest.json` before GitHub generates the source archive.
 
 ## Expected Outputs
 

@@ -1,7 +1,7 @@
 <!-- PLUGIN BADGES -->
 [![RHFest][rhfest-shield]][rhfest-url]
 
-# RaceLink RotorHazard Plugin
+# RaceLink_RH_Plugin
 
 This repository contains the RotorHazard adapter plugin for RaceLink.
 
@@ -103,16 +103,15 @@ Use the release ZIP when the target RotorHazard system must install without inte
 
 ## Release Process
 
-The optimized release flow supports both the GitHub Actions UI and the GitHub Releases UI.
+The official release flow is the GitHub Actions workflow.
 
 1. Recommended: trigger the release workflow from the GitHub Actions web UI.
 2. Choose the target branch and optionally set:
    the plugin version override
    a manual `RaceLink_Host` version override
 3. If no host version override is provided, the workflow automatically resolves the latest published `RaceLink_Host` release.
-4. The workflow syncs metadata, validates the online dependency shape, runs RHFest, bumps the plugin version, creates the release tag, downloads the resolved host wheel, builds the offline ZIP, and publishes the GitHub release.
-5. Alternative: publish a GitHub Release directly in the web UI. The same workflow also reacts to that release event and builds artifacts with the latest published `RaceLink_Host` release by default.
-6. Prefer the Actions UI path when you want the selected host version written back into the repository metadata. The GitHub Releases UI path is the convenience option for "build artifacts for this tag" and does not create a follow-up metadata commit.
+4. The workflow syncs metadata, validates the online dependency shape, runs RHFest, bumps `custom_plugins/racelink_rh_plugin/manifest.json`, validates that the manifest version and release tag match, commits the release metadata, creates the release tag, downloads the resolved host wheel, builds the offline ZIP, and publishes the GitHub release.
+5. Do not create releases manually in the GitHub Releases UI. That path is intentionally unsupported because it cannot safely rewrite project files before GitHub generates the source archive.
 
 The short maintainer playbook lives in [docs/release-playbook.md](docs/release-playbook.md).
 

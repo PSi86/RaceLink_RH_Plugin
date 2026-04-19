@@ -5,6 +5,7 @@
 # Ignore folders
 node_modules
 .venv
+.ruff_cache
 __pycache__
 dist
 dist-local

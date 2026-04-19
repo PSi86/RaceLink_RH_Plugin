@@ -8,7 +8,7 @@
     "enabled": true,
     "automerge": true
   },
-  "commitMessagePrefix": "⬆️",
+  "commitMessagePrefix": "deps:",
   "packageRules": [
     {
       "matchManagers": ["pep621"],

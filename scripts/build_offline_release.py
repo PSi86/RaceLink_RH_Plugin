@@ -1,4 +1,4 @@
-"""Build a self-contained offline release ZIP for the RaceLink RH plugin."""
+"""Build a self-contained offline release ZIP for RaceLink_RH_Plugin."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ VENDORED_DISTINFO_PREFIXES = {
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build an offline-installable RaceLink RotorHazard plugin ZIP."
+        description="Build an offline-installable RaceLink_RH_Plugin ZIP."
     )
     parser.add_argument(
         "--host-wheel",

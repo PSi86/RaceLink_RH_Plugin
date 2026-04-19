@@ -2,8 +2,6 @@
 name: Release Plugin Distribution
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -34,30 +32,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Resolve release inputs
-        id: release_inputs
-        shell: bash
-        run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "checkout_ref=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-            echo "release_tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-            echo "target_branch=${{ github.event.release.target_commitish }}" >> "$GITHUB_OUTPUT"
-            echo "plugin_version=${{ github.event.release.tag_name }}" | sed 's/^plugin_version=v/plugin_version=/' >> "$GITHUB_OUTPUT"
-            echo "host_version=" >> "$GITHUB_OUTPUT"
-            echo "create_release=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "checkout_ref=${{ inputs.target_branch }}" >> "$GITHUB_OUTPUT"
-            echo "release_tag=" >> "$GITHUB_OUTPUT"
-            echo "target_branch=${{ inputs.target_branch }}" >> "$GITHUB_OUTPUT"
-            echo "plugin_version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-            echo "host_version=${{ inputs.host_version }}" >> "$GITHUB_OUTPUT"
-            echo "create_release=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Check out plugin repository
         uses: actions/checkout@v6.0.2
         with:
-          ref: ${{ steps.release_inputs.outputs.checkout_ref }}
+          ref: ${{ inputs.target_branch }}
           fetch-depth: 0
           persist-credentials: true
 
@@ -76,9 +54,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          version="$(python scripts/resolve_racelink_host_release.py --host-version "${{ steps.release_inputs.outputs.host_version }}" --print version)"
-          tag="$(python scripts/resolve_racelink_host_release.py --host-version "${{ steps.release_inputs.outputs.host_version }}" --print tag)"
-          wheel="$(python scripts/resolve_racelink_host_release.py --host-version "${{ steps.release_inputs.outputs.host_version }}" --print wheel)"
+          version="$(python scripts/resolve_racelink_host_release.py --host-version "${{ inputs.host_version }}" --print version)"
+          tag="$(python scripts/resolve_racelink_host_release.py --host-version "${{ inputs.host_version }}" --print tag)"
+          wheel="$(python scripts/resolve_racelink_host_release.py --host-version "${{ inputs.host_version }}" --print wheel)"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "wheel=${wheel}" >> "$GITHUB_OUTPUT"
@@ -99,36 +77,44 @@ jobs:
 
       - name: Bump plugin manifest version
         id: manifest_version
-        if: steps.release_inputs.outputs.create_release == 'true'
         run: |
-          version="$(python scripts/bump_manifest_version.py --version "${{ steps.release_inputs.outputs.plugin_version }}")"
+          version="$(python scripts/bump_manifest_version.py --version "${{ inputs.version }}")"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=v${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Reuse published release version
-        id: published_release
-        if: steps.release_inputs.outputs.create_release != 'true'
-        shell: bash
+      - name: Validate manifest version and release tag
+        env:
+          EXPECTED_VERSION: ${{ steps.manifest_version.outputs.version }}
+          EXPECTED_TAG: ${{ steps.manifest_version.outputs.tag }}
         run: |
-          tag="${{ steps.release_inputs.outputs.release_tag }}"
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-      - name: Resolve final release values
-        id: final_release
-        shell: bash
-        run: |
-          version="${{ steps.manifest_version.outputs.version }}"
-          tag="${{ steps.manifest_version.outputs.tag }}"
-          if [[ -z "${version}" ]]; then
-            version="${{ steps.published_release.outputs.version }}"
-            tag="${{ steps.published_release.outputs.tag }}"
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          manifest = json.loads(
+              Path("custom_plugins/racelink_rh_plugin/manifest.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          manifest_version = str(manifest["version"])
+          expected_version = os.environ["EXPECTED_VERSION"]
+          expected_tag = os.environ["EXPECTED_TAG"]
+          derived_tag = f"v{manifest_version}"
+
+          if manifest_version != expected_version:
+              raise SystemExit(
+                  "Manifest version mismatch: "
+                  f"{manifest_version} != {expected_version}"
+              )
+          if derived_tag != expected_tag:
+              raise SystemExit(
+                  "Release tag mismatch: "
+                  f"{derived_tag} != {expected_tag}"
+              )
+          PY
 
       - name: Fail if tag or release already exists
-        if: steps.release_inputs.outputs.create_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -142,7 +128,6 @@ jobs:
           fi
 
       - name: Commit release metadata
-        if: steps.release_inputs.outputs.create_release == 'true'
         run: |
           git add build/deps.json pyproject.toml custom_plugins/racelink_rh_plugin/manifest.json README.md docs/manifest-dependency-format.md
           if git diff --cached --quiet; then
@@ -152,10 +137,9 @@ jobs:
           fi
 
       - name: Create and push release tag
-        if: steps.release_inputs.outputs.create_release == 'true'
         run: |
-          git tag "${{ steps.final_release.outputs.tag }}"
-          git push origin "HEAD:${{ steps.release_inputs.outputs.target_branch }}" --follow-tags
+          git tag "${{ steps.manifest_version.outputs.tag }}"
+          git push origin "HEAD:${{ inputs.target_branch }}" --follow-tags
 
       - name: Download RaceLink_Host release wheel
         env:
@@ -174,7 +158,7 @@ jobs:
           python scripts/build_offline_release.py \
             --host-wheel "external/RaceLink_Host/${{ steps.host_dependency.outputs.wheel }}" \
             --output-dir dist \
-            --release-tag "${{ steps.final_release.outputs.tag }}" | tee /tmp/offline_bundle_path.txt
+            --release-tag "${{ steps.manifest_version.outputs.tag }}" | tee /tmp/offline_bundle_path.txt
           echo "zip_path=$(tail -n 1 /tmp/offline_bundle_path.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
@@ -186,8 +170,8 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.final_release.outputs.tag }}
-          target_commitish: ${{ steps.release_inputs.outputs.target_branch }}
+          tag_name: ${{ steps.manifest_version.outputs.tag }}
+          target_commitish: ${{ inputs.target_branch }}
           generate_release_notes: true
           files: ${{ steps.build_bundle.outputs.zip_path }}
 
@@ -197,10 +181,10 @@ jobs:
           {
             echo "## Release Summary"
             echo
-            echo "- Plugin version: \`${{ steps.final_release.outputs.version }}\`"
-            echo "- Plugin tag: \`${{ steps.final_release.outputs.tag }}\`"
+            echo "- Plugin version: \`${{ steps.manifest_version.outputs.version }}\`"
+            echo "- Plugin tag: \`${{ steps.manifest_version.outputs.tag }}\`"
             echo "- RaceLink_Host version: \`${{ steps.host_dependency.outputs.version }}\`"
             echo "- RaceLink_Host tag: \`${{ steps.host_dependency.outputs.tag }}\`"
             echo "- RaceLink_Host wheel: \`${{ steps.host_dependency.outputs.wheel }}\`"
-            echo "- Trigger: \`${{ github.event_name }}\`"
+            echo "- Trigger: \`workflow_dispatch\`"
           } >> "$GITHUB_STEP_SUMMARY"
