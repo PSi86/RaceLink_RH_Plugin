@@ -3,9 +3,6 @@
   "domain": "racelink_rh_plugin",
   "description": "Control the RaceLink System from RotorHazard.",
   "documentation_uri": "https://racelink.dev",
-  "category": [
-    "Utilities"
-  ],
   "author": "PSi86",
   "author_uri": "https://github.com/PSi86",
   "license": "MIT",
