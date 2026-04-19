@@ -7,7 +7,7 @@
   "author_uri": "https://github.com/PSi86",
   "license": "MIT",
   "required_rhapi_version": "1.4",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "dependencies": [
     "git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0"
   ]
