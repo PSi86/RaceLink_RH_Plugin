@@ -6,24 +6,22 @@ import argparse
 import importlib
 import importlib.util
 import json
+import os
 import shutil
-import subprocess
 import sys
+import tempfile
 import types
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 PLUGIN_NAME = "racelink_rh_plugin"
 PLUGIN_RELATIVE_PATH = Path("custom_plugins") / PLUGIN_NAME
-VENDOR_RELATIVE_PATH = Path("vendor") / "site-packages"
+OFFLINE_WHEELS_RELATIVE_PATH = Path("offline_wheels")
 REPO_ROOT_FILES = ("README.md", "LICENSE")
 PLUGIN_IGNORED_DIRS = {".git", ".github", ".ruff_cache", ".venv", "__pycache__"}
 PLUGIN_IGNORED_SUFFIXES = {".pyc", ".pyo"}
-PYTHON_RUNTIME_DEPENDENCIES = ("pyserial==3.5",)
-VENDORED_DISTINFO_PREFIXES = {
-    "pyserial-",
-    "racelink_host-",
-}
+INSTALL_TARGET_ENV = "RACELINK_RH_PLUGIN_INSTALL_TARGET"
+FORCE_INSTALL_ENV = "RACELINK_RH_PLUGIN_FORCE_BUNDLED_INSTALL"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -76,55 +74,16 @@ def _copy_plugin_tree(source_dir: Path, stage_plugin_dir: Path) -> None:
     )
 
 
-def _extract_host_wheel(host_wheel_path: Path, vendor_root: Path) -> None:
-    """Extract the released host wheel into the vendored site-packages directory."""
+def _stage_offline_wheels(host_wheel_path: Path, stage_plugin_dir: Path) -> Path:
+    """Populate the offline wheel staging directory for the bundle."""
     if host_wheel_path.suffix != ".whl":
         message = f"Host artifact is not a wheel: {host_wheel_path}"
         raise RuntimeError(message)
-    with ZipFile(host_wheel_path) as archive:
-        archive.extractall(vendor_root)
 
-
-def _install_vendor_dependencies(vendor_root: Path) -> None:
-    """Install extra runtime dependencies required by the host wheel offline bundle."""
-    subprocess.run(  # noqa: S603
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            "--target",
-            str(vendor_root),
-            *PYTHON_RUNTIME_DEPENDENCIES,
-        ],
-        check=True,
-    )
-
-
-def _prune_vendor_runtime(vendor_root: Path) -> None:
-    """Keep only offline-required runtime pieces in the vendored site-packages."""
-    for child in vendor_root.iterdir():
-        if child.name in {"controller.py", "racelink", "serial"}:
-            continue
-        if any(child.name.startswith(prefix) for prefix in VENDORED_DISTINFO_PREFIXES):
-            continue
-        if child.is_dir():
-            shutil.rmtree(child)
-        else:
-            child.unlink()
-
-    build_backend = vendor_root / "racelink" / "_build_backend.py"
-    if build_backend.is_file():
-        build_backend.unlink()
-
-
-def _install_host_runtime(host_wheel_path: Path, stage_plugin_dir: Path) -> None:
-    vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
-    vendor_root.mkdir(parents=True, exist_ok=True)
-    _extract_host_wheel(host_wheel_path, vendor_root)
-    _install_vendor_dependencies(vendor_root)
-    _prune_vendor_runtime(vendor_root)
+    offline_wheels_dir = stage_plugin_dir / OFFLINE_WHEELS_RELATIVE_PATH
+    offline_wheels_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(host_wheel_path, offline_wheels_dir / host_wheel_path.name)
+    return offline_wheels_dir
 
 
 def _patch_manifest(stage_plugin_dir: Path) -> dict[str, object]:
@@ -145,6 +104,10 @@ def _archive_root_name(release_tag: str) -> str:
 
 
 def _bundle_name(manifest: dict[str, object], release_tag: str) -> str:
+    configured_name = str(manifest.get("zip_filename", "")).strip()
+    if configured_name:
+        return configured_name
+
     version = str(manifest.get("version", "0.0.0"))
     label = str(release_tag).strip() or f"v{version}"
     return f"racelink_rh_plugin_offline_{label}.zip"
@@ -163,35 +126,115 @@ def _write_zip(stage_root: Path, zip_path: Path) -> None:
             archive.write(file_path, file_path.relative_to(stage_root))
 
 
-def _validate_vendor_runtime(vendor_root: Path) -> None:
-    """Validate the pruned vendored runtime contents."""
-    if not (vendor_root / "controller.py").is_file():
-        raise RuntimeError("Bundled controller.py is missing from offline artifact")
-    if not (vendor_root / "serial").is_dir():
-        raise RuntimeError("Bundled pyserial runtime is missing from offline artifact")
-
-    racelink_package_dir = vendor_root / "racelink"
-    if not racelink_package_dir.is_dir():
-        raise RuntimeError("Bundled racelink package is missing from offline artifact")
-    if not (racelink_package_dir / "app.py").is_file():
-        raise RuntimeError("Bundled host app.py is missing from vendor artifact")
-    if not (racelink_package_dir / "web" / "__init__.py").is_file():
-        raise RuntimeError("Bundled host web package is missing from vendor artifact")
-
-    unexpected_vendor_children = sorted(
-        child.name
-        for child in vendor_root.iterdir()
-        if child.name not in {"controller.py", "racelink", "serial"}
-        and not any(
-            child.name.startswith(prefix) for prefix in VENDORED_DISTINFO_PREFIXES
-        )
-    )
-    if unexpected_vendor_children:
+def _validate_offline_wheels(offline_wheels_dir: Path) -> None:
+    """Assert that the offline bundle contains only the expected host wheel."""
+    wheel_names = sorted(path.name for path in offline_wheels_dir.glob("*.whl"))
+    host_wheels = [name for name in wheel_names if name.startswith("racelink_host-")]
+    if len(host_wheels) != 1:
         message = (
-            "Unexpected vendored packages remain in offline artifact: "
-            f"{unexpected_vendor_children}"
+            "Offline artifact must contain exactly one RaceLink_Host wheel under "
+            f"offline_wheels/: {wheel_names}"
         )
         raise RuntimeError(message)
+
+    if len(wheel_names) != 1:
+        message = (
+            "Offline artifact should only contain the RaceLink_Host wheel because "
+            "RotorHazard already provides the shared runtime dependencies: "
+            f"{wheel_names}"
+        )
+        raise RuntimeError(message)
+
+
+def _assert_import_under_root(module_name: str, root: Path) -> None:
+    """Ensure one imported module resolves from the simulated install target."""
+    module = importlib.import_module(module_name)
+    module_file = getattr(module, "__file__", None)
+    if module_file is None:
+        message = f"Imported module {module_name!r} has no __file__ for validation"
+        raise RuntimeError(message)
+
+    resolved_module_path = Path(module_file).resolve()
+    resolved_root = root.resolve()
+    if not resolved_module_path.is_relative_to(resolved_root):
+        message = (
+            f"Imported module {module_name!r} did not load from the simulated "
+            f"offline install target: {resolved_module_path}"
+        )
+        raise RuntimeError(message)
+
+
+def _load_staged_plugin_module(
+    stage_plugin_dir: Path,
+    custom_plugins_root: Path,
+) -> types.ModuleType:
+    """Load the staged plugin package for offline validation."""
+    plugins_parent = types.ModuleType("plugins")
+    plugins_parent.__path__ = [str(custom_plugins_root)]
+    sys.modules["plugins"] = plugins_parent
+
+    plugin_init = stage_plugin_dir / "__init__.py"
+    spec = importlib.util.spec_from_file_location(
+        "plugins.racelink_rh_plugin",
+        plugin_init,
+        submodule_search_locations=[str(stage_plugin_dir)],
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to create import spec for staged plugin")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["plugins.racelink_rh_plugin"] = module
+    spec.loader.exec_module(module)
+    if not hasattr(module, "initialize"):
+        raise RuntimeError("Staged plugin package does not expose initialize()")
+    return module
+
+
+def _validate_offline_runtime_install(
+    *,
+    archive_root: Path,
+    stage_plugin_dir: Path,
+) -> None:
+    """Simulate the first offline start and verify host-wheel installation."""
+    custom_plugins_root = archive_root / "custom_plugins"
+    temp_root = Path(tempfile.mkdtemp(prefix="racelink-rh-plugin-offline-"))
+    install_target = temp_root / "site-packages"
+    install_target.mkdir(parents=True, exist_ok=True)
+    previous_target_env = os.environ.get(INSTALL_TARGET_ENV)
+    previous_force_env = os.environ.get(FORCE_INSTALL_ENV)
+    sys.path.insert(0, str(custom_plugins_root))
+    created_stub_modules = _install_rotorhazard_stubs()
+    imported_modules = ["controller", "racelink", "racelink.app", "racelink.web"]
+    try:
+        os.environ[INSTALL_TARGET_ENV] = str(install_target)
+        os.environ[FORCE_INSTALL_ENV] = "1"
+        module = _load_staged_plugin_module(stage_plugin_dir, custom_plugins_root)
+        module._ensure_host_runtime_available()  # noqa: SLF001
+        importlib.import_module("controller")
+        importlib.import_module("racelink.app")
+        importlib.import_module("racelink.web")
+        _assert_import_under_root("controller", install_target)
+        _assert_import_under_root("racelink.app", install_target)
+        _assert_import_under_root("racelink.web", install_target)
+    finally:
+        if previous_target_env is None:
+            os.environ.pop(INSTALL_TARGET_ENV, None)
+        else:
+            os.environ[INSTALL_TARGET_ENV] = previous_target_env
+        if previous_force_env is None:
+            os.environ.pop(FORCE_INSTALL_ENV, None)
+        else:
+            os.environ[FORCE_INSTALL_ENV] = previous_force_env
+
+        if sys.path and sys.path[0] == str(custom_plugins_root):
+            sys.path.pop(0)
+        for module_name in (
+            "plugins.racelink_rh_plugin",
+            "plugins",
+            *created_stub_modules,
+            *imported_modules,
+        ):
+            sys.modules.pop(module_name, None)
+        shutil.rmtree(temp_root, ignore_errors=True)
 
 
 def _validate_stage(stage_root: Path) -> None:
@@ -203,46 +246,12 @@ def _validate_stage(stage_root: Path) -> None:
         message = f"Offline manifest still declares dependencies: {dependencies}"
         raise RuntimeError(message)
 
-    vendor_root = stage_plugin_dir / VENDOR_RELATIVE_PATH
-    _validate_vendor_runtime(vendor_root)
-
-    custom_plugins_root = archive_root / "custom_plugins"
-    sys.path.insert(0, str(custom_plugins_root))
-    sys.path.insert(0, str(vendor_root))
-    created_stub_modules = _install_rotorhazard_stubs()
-    try:
-        plugins_parent = types.ModuleType("plugins")
-        plugins_parent.__path__ = [str(archive_root / "custom_plugins")]
-        sys.modules["plugins"] = plugins_parent
-
-        plugin_init = stage_plugin_dir / "__init__.py"
-        spec = importlib.util.spec_from_file_location(
-            "plugins.racelink_rh_plugin",
-            plugin_init,
-            submodule_search_locations=[str(stage_plugin_dir)],
-        )
-        if spec is None or spec.loader is None:
-            raise RuntimeError("Unable to create import spec for staged plugin")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules["plugins.racelink_rh_plugin"] = module
-        spec.loader.exec_module(module)
-        if not hasattr(module, "initialize"):
-            raise RuntimeError("Staged plugin package does not expose initialize()")
-
-        importlib.import_module("controller")
-        importlib.import_module("racelink.app")
-        importlib.import_module("racelink.web")
-    finally:
-        if sys.path and sys.path[0] == str(vendor_root):
-            sys.path.pop(0)
-        if sys.path and sys.path[0] == str(custom_plugins_root):
-            sys.path.pop(0)
-        for module_name in (
-            "plugins.racelink_rh_plugin",
-            "plugins",
-            *created_stub_modules,
-        ):
-            sys.modules.pop(module_name, None)
+    offline_wheels_dir = stage_plugin_dir / OFFLINE_WHEELS_RELATIVE_PATH
+    _validate_offline_wheels(offline_wheels_dir)
+    _validate_offline_runtime_install(
+        archive_root=archive_root,
+        stage_plugin_dir=stage_plugin_dir,
+    )
 
 
 def _install_stub(module_name: str, module: types.ModuleType) -> str | None:
@@ -336,6 +345,88 @@ def _build_data_import_stub() -> types.ModuleType:
     return data_import
 
 
+class _StubBlueprint:
+    """Minimal Blueprint stub for host import validation."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        self.args = args
+        self.kwargs = kwargs
+
+    def route(self, *_args: object, **_kwargs: object) -> object:
+        def _decorator(func: object) -> object:
+            return func
+
+        return _decorator
+
+    def app_template_filter(self, *_args: object, **_kwargs: object) -> object:
+        def _decorator(func: object) -> object:
+            return func
+
+        return _decorator
+
+
+class _StubResponse:
+    """Minimal Flask response stub for host import validation."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        self.args = args
+        self.kwargs = kwargs
+
+
+def _stub_jsonify(*args: object, **kwargs: object) -> dict[str, object]:
+    """Return a dict payload that mimics Flask jsonify output for tests."""
+    return {"args": args, "kwargs": kwargs}
+
+
+def _stub_stream_with_context(func: object) -> object:
+    """Return the wrapped callable unchanged for import-time validation."""
+    return func
+
+
+def _stub_request_get_json(*_args: object, **_kwargs: object) -> dict[str, object]:
+    """Return an empty request payload for import-time validation."""
+    return {}
+
+
+def _stub_render_template(*_args: object, **_kwargs: object) -> str:
+    """Return an empty template rendering for import-time validation."""
+    return ""
+
+
+def _build_flask_stub() -> types.ModuleType:
+    """Build a lightweight Flask surface used by host import smoke tests."""
+    flask = types.ModuleType("flask")
+    flask.Blueprint = _StubBlueprint
+    flask.Response = _StubResponse
+    flask.jsonify = _stub_jsonify
+    flask.request = types.SimpleNamespace(get_json=_stub_request_get_json)
+    flask.stream_with_context = _stub_stream_with_context
+    flask.templating = types.SimpleNamespace(render_template=_stub_render_template)
+    return flask
+
+
+def _build_serial_stub() -> tuple[types.ModuleType, types.ModuleType, types.ModuleType]:
+    """Build lightweight pyserial stubs used by host import smoke tests."""
+    serial = types.ModuleType("serial")
+
+    class Serial:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+        def close(self) -> None:
+            return None
+
+    serial.Serial = Serial
+    serial.SerialException = Exception
+
+    serial_tools = types.ModuleType("serial.tools")
+    list_ports = types.ModuleType("serial.tools.list_ports")
+    list_ports.comports = list
+    serial_tools.list_ports = list_ports
+    return serial, serial_tools, list_ports
+
+
 def _install_rotorhazard_stubs() -> list[str]:
     """Install lightweight stub modules needed for offline smoke imports."""
     created: list[str] = []
@@ -345,9 +436,20 @@ def _install_rotorhazard_stubs() -> list[str]:
         ("RHUI", _build_rhui_stub),
         ("data_export", _build_data_export_stub),
         ("data_import", _build_data_import_stub),
+        ("flask", _build_flask_stub),
     )
     for module_name, factory in stub_factories:
         installed_name = _install_stub(module_name, factory())
+        if installed_name is not None:
+            created.append(installed_name)
+
+    serial_stub, serial_tools_stub, list_ports_stub = _build_serial_stub()
+    for module_name, module in (
+        ("serial", serial_stub),
+        ("serial.tools", serial_tools_stub),
+        ("serial.tools.list_ports", list_ports_stub),
+    ):
+        installed_name = _install_stub(module_name, module)
         if installed_name is not None:
             created.append(installed_name)
 
@@ -375,7 +477,7 @@ def build_offline_release(
         source_path = _repo_root() / root_file
         if source_path.is_file():
             shutil.copy2(source_path, archive_root / root_file)
-    _install_host_runtime(host_wheel_path, stage_plugin_dir)
+    _stage_offline_wheels(host_wheel_path, stage_plugin_dir)
     _validate_stage(stage_root)
 
     zip_path = output_dir / _bundle_name(manifest, release_tag)

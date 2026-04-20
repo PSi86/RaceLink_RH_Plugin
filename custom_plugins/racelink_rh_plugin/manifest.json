@@ -8,6 +8,7 @@
   "license": "MIT",
   "required_rhapi_version": "1.4",
   "version": "0.2.8",
+  "zip_filename": "racelink_rh_plugin_offline_v0.2.8.zip",
   "dependencies": [
     "git+https://github.com/PSi86/RaceLink_Host.git@v0.1.0"
   ]

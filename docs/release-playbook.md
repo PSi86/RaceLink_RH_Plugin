@@ -39,7 +39,7 @@ This playbook is the shortest path for maintainers to publish a new `RaceLink_RH
 
 - Git tag `v<plugin-version>`
 - GitHub release for `RaceLink_RH_Plugin`
-- Uploaded offline ZIP artifact containing the vendored host runtime
+- Uploaded offline ZIP artifact containing the staged `racelink-host` wheel for local installation into the RotorHazard Python environment
 
 ## Failure Hints
 
