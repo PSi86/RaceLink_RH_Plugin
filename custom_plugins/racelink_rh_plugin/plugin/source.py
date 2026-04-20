@@ -54,9 +54,7 @@ class RotorHazardSource(EventSource):
             slot = int(heat_node.node_index)
             pilot_id = heat_node.pilot_id
             pilot = (
-                self.rhapi.db.pilot_by_id(pilot_id)
-                if pilot_id is not None
-                else None
+                self.rhapi.db.pilot_by_id(pilot_id) if pilot_id is not None else None
             )
             callsign_by_slot[slot] = pilot.callsign if pilot else ""
 

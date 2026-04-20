@@ -93,9 +93,7 @@ class BootstrapTests(unittest.TestCase):
         racelink_web_mod.register_rl_blueprint = self.register_rl_blueprint
         sys.modules["racelink.web"] = racelink_web_mod
 
-        ui_mod = types.ModuleType(
-            "custom_plugins.racelink_rh_plugin.plugin.ui"
-        )
+        ui_mod = types.ModuleType("custom_plugins.racelink_rh_plugin.plugin.ui")
 
         class FakeRotorHazardUIAdapter:
             def __init__(self, controller: Any, rhapi: Any) -> None:
