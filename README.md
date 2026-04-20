@@ -22,9 +22,9 @@ The dependency-format decision for `custom_plugins/racelink_rh_plugin/manifest.j
 RaceLink has two supported distribution modes:
 
 - Online installation: RotorHazard installs this plugin and resolves the exact `RaceLink_Host` runtime from an immutable Git tag declared in plugin metadata.
-- Offline installation: a release ZIP bundles this plugin together with the same resolved `racelink-host` runtime inside `custom_plugins/racelink_rh_plugin/vendor/site-packages`.
+- Offline installation: a release ZIP bundles the same resolved `racelink-host` and `pyserial` wheels under `custom_plugins/racelink_rh_plugin/offline_wheels`.
 
-That means both installation modes use the same host version for a given release. The difference is only whether the host package is fetched during installation or vendored into the release ZIP.
+That means both installation modes use the same host version for a given release and load it from the normal RotorHazard Python environment. The difference is only whether the host wheel is fetched during installation or staged locally inside the release ZIP. Shared base dependencies such as Flask and pyserial continue to come from RotorHazard itself.
 
 ## Architecture
 
@@ -89,9 +89,10 @@ Use the repository metadata-driven installation when the target RotorHazard syst
 
 Use the release ZIP when the target RotorHazard system must install without internet access.
 
-- The ZIP contains `custom_plugins/racelink_rh_plugin/vendor/site-packages`
-- That vendored runtime contains the selected `racelink-host` wheel contents plus runtime dependencies such as `pyserial`
+- The ZIP contains `custom_plugins/racelink_rh_plugin/offline_wheels` with only the selected `racelink-host` wheel
+- On the first offline plugin start, the plugin installs that bundled host wheel into the same RotorHazard Python environment that the online installation uses
 - The offline ZIP clears manifest dependencies so RotorHazard does not try to fetch packages during installation
+- The first offline start can take a moment because the bundled host wheel is installed locally before the plugin continues loading
 
 ## Version Mapping
 

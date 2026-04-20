@@ -14,6 +14,11 @@ VERSION_PATTERN = re.compile(
 )
 
 
+def _offline_zip_filename(version: str) -> str:
+    normalized = _normalize_version(version)
+    return f"racelink_rh_plugin_offline_v{normalized}.zip"
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -68,6 +73,7 @@ def bump_manifest_version(*, manifest_path: Path, version: str) -> str:
     current_version = _normalize_version(str(manifest["version"]))
     target_version = _normalize_version(version) or _increment_version(current_version)
     manifest["version"] = target_version
+    manifest["zip_filename"] = _offline_zip_filename(target_version)
     manifest_path.write_text(
         json.dumps(manifest, indent=2) + "\n",
         encoding="utf-8",
