@@ -34,7 +34,12 @@ class RotorHazardSource(EventSource):
 
     def get_current_heat_slot_list(self) -> list[HeatSlot]:
         """Build a channel/callsign list for the current heat."""
-        freq = json.loads(self.rhapi.race.frequencyset.frequencies)
+        current_heat = self.rhapi.race.heat
+        if current_heat is None:
+            return []
+
+        profile = self.rhapi.race.frequencyset
+        freq = json.loads(profile.frequencies)
         bands = freq["b"]
         channels = freq["c"]
         race_channels = [
@@ -42,19 +47,20 @@ class RotorHazardSource(EventSource):
             for index, band in enumerate(bands)
         ]
 
-        ctx = self.rhapi._racecontext  # noqa: SLF001
-        rhdata = ctx.rhdata
-        race = ctx.race
-        heat_nodes = rhdata.get_heatNodes_by_heat(race.current_heat) or []
+        heat_nodes = self.rhapi.db.slots_by_heat(current_heat) or []
 
         callsign_by_slot: dict[int, str] = {}
         for heat_node in heat_nodes:
             slot = int(heat_node.node_index)
             pilot_id = heat_node.pilot_id
-            pilot = rhdata.get_pilot(pilot_id) if pilot_id else None
+            pilot = (
+                self.rhapi.db.pilot_by_id(pilot_id)
+                if pilot_id is not None
+                else None
+            )
             callsign_by_slot[slot] = pilot.callsign if pilot else ""
 
-        channel_count = min(len(race_channels), 8)
+        channel_count = min(len(race_channels), int(self.rhapi.race.slots))
         return [
             (index, callsign_by_slot.get(index, ""), race_channels[index])
             for index in range(channel_count)
