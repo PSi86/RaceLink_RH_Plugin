@@ -95,6 +95,7 @@ def initialize(rhapi: Any) -> None:
     rh_adapter = RotorHazardUIAdapter(controller, rhapi)
     controller.rh_adapter = rh_adapter
     controller.rh_source = rh_adapter.source
+    rhapi.event_source = rh_adapter.source
     controller.action_reg_fn = None
     _wrap_controller_state_hooks(controller, rh_adapter)
 
