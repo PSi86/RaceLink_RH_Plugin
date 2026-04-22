@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from controller import RaceLink_Host
 from eventmanager import Evt
@@ -13,17 +13,6 @@ from eventmanager import Evt
 from .ui import RotorHazardUIAdapter
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True)
-class _BootstrapState:
-    """Keep the latest bootstrap runtime references."""
-
-    rl_app: Any = None
-    rl_instance: Any = None
-
-
-_STATE = _BootstrapState()
 
 
 def _load_runtime_module(module_name: str) -> Any:
@@ -43,26 +32,31 @@ def _sync_adapter_state(
         logger.exception("Unable to synchronize RaceLink RotorHazard bindings")
 
 
-def _wrap_controller_state_hooks(
-    controller: RaceLink_Host,
-    rh_adapter: RotorHazardUIAdapter,
-) -> None:
-    """Augment controller persistence hooks with RotorHazard UI refreshes."""
-    original_load_from_db = controller.load_from_db
-    original_save_to_db = controller.save_to_db
+@dataclass(slots=True)
+class RaceLinkPlugin:
+    """Owner of per-plugin runtime references.
 
-    def _load_from_db(*args: Any, **kwargs: Any) -> Any:
-        result = original_load_from_db(*args, **kwargs)
-        _sync_adapter_state(rh_adapter, broadcast_panels=True)
-        return result
+    Replaces the module-global ``_STATE`` singleton (plan P2-3). Instances are
+    produced by :func:`initialize`; tests and teardown hooks can reach the
+    live references through the returned object.
+    """
 
-    def _save_to_db(*args: Any, **kwargs: Any) -> Any:
-        result = original_save_to_db(*args, **kwargs)
-        _sync_adapter_state(rh_adapter, broadcast_panels=True)
-        return result
+    controller: Optional[RaceLink_Host] = None
+    rh_adapter: Optional[RotorHazardUIAdapter] = None
+    rl_app: Any = None
+    rl_instance: Any = None
 
-    controller.load_from_db = _load_from_db
-    controller.save_to_db = _save_to_db
+    def shutdown(self) -> None:
+        """Dispose the host runtime (plan P1-2)."""
+        ctrl = self.controller
+        if ctrl is None:
+            return
+        shutdown_fn = getattr(ctrl, "shutdown", None)
+        if callable(shutdown_fn):
+            try:
+                shutdown_fn()
+            except Exception:
+                logger.exception("RaceLink: host shutdown raised")
 
 
 def _handle_startup(
@@ -75,8 +69,13 @@ def _handle_startup(
     _sync_adapter_state(rh_adapter, broadcast_panels=True)
 
 
-def initialize(rhapi: Any) -> None:
-    """Initialize the RaceLink host runtime inside RotorHazard."""
+def initialize(rhapi: Any) -> RaceLinkPlugin:
+    """Initialize the RaceLink host runtime inside RotorHazard.
+
+    Returns the :class:`RaceLinkPlugin` owning every instantiated runtime
+    reference. The returned object is also stashed on ``rhapi.racelink`` for
+    discoverability by RotorHazard's lifecycle callbacks.
+    """
     create_runtime = _load_runtime_module("racelink.app").create_runtime
     null_sink_factory = _load_runtime_module("racelink.core").NullSink
     rl_device_group = _load_runtime_module("racelink.domain").RL_DeviceGroup
@@ -97,7 +96,11 @@ def initialize(rhapi: Any) -> None:
     controller.rh_source = rh_adapter.source
     rhapi.event_source = rh_adapter.source
     controller.action_reg_fn = None
-    _wrap_controller_state_hooks(controller, rh_adapter)
+    # Plan P2-2: use the first-class persistence callback instead of wrapping
+    # ``controller.load_from_db`` / ``save_to_db`` at runtime.
+    controller.on_persistence_changed = lambda: _sync_adapter_state(
+        rh_adapter, broadcast_panels=True
+    )
 
     rl_app = create_runtime(
         rhapi,
@@ -112,8 +115,19 @@ def initialize(rhapi: Any) -> None:
         event_source=rh_adapter.source,
         data_sink=null_sink_factory(),
     )
-    _STATE.rl_app = rl_app
-    _STATE.rl_instance = rl_app.rl_instance
+
+    plugin = RaceLinkPlugin(
+        controller=controller,
+        rh_adapter=rh_adapter,
+        rl_app=rl_app,
+        rl_instance=rl_app.rl_instance,
+    )
+    # Expose the live plugin on the host API so teardown hooks or tests can
+    # locate it without touching a module global (plan P2-3).
+    try:
+        rhapi.racelink = plugin
+    except Exception:
+        logger.debug("RaceLink: could not attach plugin handle to rhapi", exc_info=True)
 
     register_rl_blueprint(
         rhapi,
@@ -134,3 +148,8 @@ def initialize(rhapi: Any) -> None:
     rhapi.events.on(Evt.RACE_START, rl_app.rl_instance.onRaceStart)
     rhapi.events.on(Evt.RACE_FINISH, rl_app.rl_instance.onRaceFinish)
     rhapi.events.on(Evt.RACE_STOP, rl_app.rl_instance.onRaceStop)
+    shutdown_evt = getattr(Evt, "SHUTDOWN", None)
+    if shutdown_evt is not None:
+        rhapi.events.on(shutdown_evt, lambda _args: plugin.shutdown())
+
+    return plugin

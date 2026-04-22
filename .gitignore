@@ -1,6 +1,10 @@
 # Ignore files
 .env
 *.code-workspace
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
 
 # Ignore folders
 node_modules
@@ -15,3 +19,9 @@ dist-local-*
 .tmp-pi4
 .tmp-pi4-top
 .tmp-pi5
+
+# Assistant / IDE workspace state
+.claude/
+.idea/
+.vscode/
+*.egg-info/
