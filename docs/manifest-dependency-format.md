@@ -4,7 +4,7 @@
 
 For online installations, this repository uses:
 
-`git+https://github.com/PSi86/RaceLink_Host.git@v0.1.1`
+`git+https://github.com/PSi86/RaceLink_Host.git@v0.1.2`
 
 Direct wheel references in PEP-508 form stay out of `manifest.json` for now.
 

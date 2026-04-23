@@ -42,6 +42,11 @@ class RotorHazardActionsMixin:
         if not getattr(self.controller, "uiGroupList", None):
             logger.debug("Skipping default RaceLink action registration: no groups")
             return
+        if not getattr(self.controller, "action_reg_fn", None):
+            # RotorHazard has not injected the action register fn yet. The
+            # initial Evt.ACTIONS_INITIALIZE call does that; scope-limited
+            # refreshes before then are intentionally skipped.
+            return
 
         effect_options = self._get_select_options("wled_control", "presetId")
         default_effect = effect_options[0].value if effect_options else "01"
@@ -77,6 +82,9 @@ class RotorHazardActionsMixin:
 
     def _register_special_actions(self) -> None:
         """Register capability-driven special actions."""
+        if not getattr(self.controller, "action_reg_fn", None):
+            # See note in _register_default_group_action.
+            return
         specials = get_specials_config(
             context={"rhapi": self.rhapi, "gc": self.controller}
         )

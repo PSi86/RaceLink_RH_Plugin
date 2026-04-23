@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "RaceLink Adapter Plugin for RotorHazard."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["racelink-host @ https://github.com/PSi86/RaceLink_Host/releases/download/v0.1.1/racelink_host-0.1.1-py3-none-any.whl"]
+dependencies = ["racelink-host @ https://github.com/PSi86/RaceLink_Host/releases/download/v0.1.2/racelink_host-0.1.2-py3-none-any.whl"]
 
 [dependency-groups]
 dev = [

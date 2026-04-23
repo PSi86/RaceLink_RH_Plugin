@@ -15,7 +15,7 @@ The dependency-format decision for `custom_plugins/racelink_rh_plugin/manifest.j
 - RotorHazard-specific plugin bootstrap and RH bridges under `custom_plugins/racelink_rh_plugin/plugin`
 - Plugin manifest for RotorHazard and RHFest validation
 - Development tooling based on [uv] and [pre-commit]
-- `uv` dependency on the immutable `racelink-host` GitHub release wheel for the repo-pinned development baseline `0.1.1`
+- `uv` dependency on the immutable `racelink-host` GitHub release wheel for the repo-pinned development baseline `0.1.2`
 
 ## Distribution
 

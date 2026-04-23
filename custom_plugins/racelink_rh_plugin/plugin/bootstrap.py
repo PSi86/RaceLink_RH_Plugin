@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import atexit
 import importlib
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from controller import RaceLink_Host
 from eventmanager import Evt
@@ -24,10 +25,16 @@ def _sync_adapter_state(
     rh_adapter: RotorHazardUIAdapter,
     *,
     broadcast_panels: bool = False,
+    scopes: Any = None,
 ) -> None:
-    """Refresh RotorHazard-facing UI bindings after controller state changes."""
+    """Refresh RotorHazard-facing UI bindings after controller state changes.
+
+    ``scopes`` is the ``set[str]`` state-scope hint forwarded by the Host via
+    :attr:`RaceLink_Host.on_persistence_changed`. When omitted (or ``None``) the
+    adapter falls back to a full sync (startup path).
+    """
     try:
-        rh_adapter.sync_rotorhazard_ui(broadcast_panels=broadcast_panels)
+        rh_adapter.apply_scoped_update(scopes, broadcast_panels=broadcast_panels)
     except Exception:
         logger.exception("Unable to synchronize RaceLink RotorHazard bindings")
 
@@ -41,8 +48,8 @@ class RaceLinkPlugin:
     live references through the returned object.
     """
 
-    controller: Optional[RaceLink_Host] = None
-    rh_adapter: Optional[RotorHazardUIAdapter] = None
+    controller: RaceLink_Host | None = None
+    rh_adapter: RotorHazardUIAdapter | None = None
     rl_app: Any = None
     rl_instance: Any = None
 
@@ -66,7 +73,7 @@ def _handle_startup(
 ) -> None:
     """Run the RaceLink startup flow after RotorHazard is fully initialized."""
     rl_instance.onStartup(args)
-    _sync_adapter_state(rh_adapter, broadcast_panels=True)
+    _sync_adapter_state(rh_adapter, broadcast_panels=True)  # scopes=None → FULL
 
 
 def initialize(rhapi: Any) -> RaceLinkPlugin:
@@ -96,11 +103,15 @@ def initialize(rhapi: Any) -> RaceLinkPlugin:
     controller.rh_source = rh_adapter.source
     rhapi.event_source = rh_adapter.source
     controller.action_reg_fn = None
+
     # Plan P2-2: use the first-class persistence callback instead of wrapping
-    # ``controller.load_from_db`` / ``save_to_db`` at runtime.
-    controller.on_persistence_changed = lambda: _sync_adapter_state(
-        rh_adapter, broadcast_panels=True
-    )
+    # ``controller.load_from_db`` / ``save_to_db`` at runtime. The callback
+    # accepts an optional ``scopes`` set-of-strings so we only refresh the
+    # RotorHazard panels that actually depend on the mutated state.
+    def _on_persistence_changed(scopes: Any = None) -> None:
+        _sync_adapter_state(rh_adapter, broadcast_panels=True, scopes=scopes)
+
+    controller.on_persistence_changed = _on_persistence_changed
 
     rl_app = create_runtime(
         rhapi,
@@ -151,5 +162,12 @@ def initialize(rhapi: Any) -> RaceLinkPlugin:
     shutdown_evt = getattr(Evt, "SHUTDOWN", None)
     if shutdown_evt is not None:
         rhapi.events.on(shutdown_evt, lambda _args: plugin.shutdown())
+
+    # Hot-reload / SIGTERM / Ctrl-C do not fire Evt.SHUTDOWN, but still need
+    # the serial transport to release its exclusive lock; otherwise the next
+    # RH process sees ``Skip busy port ... exclusive lock failed`` on boot.
+    # ``plugin.shutdown`` is idempotent, so a double-fire (atexit + event) is
+    # safe.
+    atexit.register(plugin.shutdown)
 
     return plugin

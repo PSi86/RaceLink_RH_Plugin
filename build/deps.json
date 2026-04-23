@@ -3,6 +3,6 @@
     "package_name": "racelink-host",
     "github_repository": "PSi86/RaceLink_Host",
     "release_selection": "latest",
-    "development_version": "0.1.0"
+    "development_version": "0.1.2"
   }
 }

@@ -105,6 +105,7 @@ class BootstrapTests(unittest.TestCase):
                 self.register_rl_dataexporter = Mock(name="register_rl_dataexporter")
                 self.registerActions = Mock(name="registerActions")
                 self.sync_rotorhazard_ui = Mock(name="sync_rotorhazard_ui")
+                self.apply_scoped_update = Mock(name="apply_scoped_update")
 
         ui_mod.RotorHazardUIAdapter = FakeRotorHazardUIAdapter
         sys.modules["custom_plugins.racelink_rh_plugin.plugin.ui"] = ui_mod
