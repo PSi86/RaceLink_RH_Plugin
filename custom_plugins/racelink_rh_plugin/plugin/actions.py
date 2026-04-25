@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from EventActions import ActionEffect
-from racelink.domain import RL_FLAG_HAS_BRI, RL_FLAG_POWER_ON, get_specials_config
+from racelink.domain import get_specials_config
 from RHUI import UIField, UIFieldSelectOption, UIFieldType
 
 logger = logging.getLogger(__name__)
@@ -35,10 +35,16 @@ class RotorHazardActionsMixin:
             return
 
         self._register_default_group_action()
+        self._register_scene_action()
         self._register_special_actions()
 
     def _register_default_group_action(self) -> None:
-        """Register the default group control action."""
+        """Register the default group control action.
+
+        Phase C: the preset dropdown is backed by ``RLPresetsService`` (stable
+        int ids), not by the legacy WLED ``presets_*.json`` list. WLED-presets
+        live only in the RaceLink WebUI now.
+        """
         if not getattr(self.controller, "uiGroupList", None):
             logger.debug("Skipping default RaceLink action registration: no groups")
             return
@@ -48,8 +54,8 @@ class RotorHazardActionsMixin:
             # refreshes before then are intentionally skipped.
             return
 
-        effect_options = self._get_select_options("wled_control", "presetId")
-        default_effect = effect_options[0].value if effect_options else "01"
+        preset_options = self._rl_preset_options_for_action()
+        default_preset = preset_options[0].value if preset_options else "0"
         fields = [
             UIField(
                 "rl_action_group",
@@ -59,11 +65,11 @@ class RotorHazardActionsMixin:
                 value=self.controller.uiGroupList[0].value,
             ),
             UIField(
-                "rl_action_effect",
-                "Color",
+                "rl_action_preset",
+                "RL Preset",
                 UIFieldType.SELECT,
-                options=effect_options,
-                value=default_effect,
+                options=preset_options,
+                value=default_preset,
             ),
             UIField(
                 "rl_action_brightness",
@@ -80,10 +86,123 @@ class RotorHazardActionsMixin:
         )
         self.controller.action_reg_fn(effect)
 
-    def _register_special_actions(self) -> None:
-        """Register capability-driven special actions."""
+    def _rl_preset_options_for_action(self) -> list[UIFieldSelectOption]:
+        """Build select-options for the default group ActionEffect from the
+        RL preset store. Mirrors :meth:`RotorHazardUIAdapter._rl_preset_options`
+        but stays local to the actions mixin to keep import graphs simple."""
+        rl_service = getattr(self.controller, "rl_presets_service", None)
+        if rl_service is None:
+            return [UIFieldSelectOption("0", "— no RL presets —")]
+        try:
+            presets = rl_service.list()
+        except Exception:
+            # swallow-ok: never block action registration on preset-load issues
+            logger.exception("RL: failed to load RL preset list for action")
+            return [UIFieldSelectOption("0", "— no RL presets —")]
+        if not presets:
+            return [UIFieldSelectOption("0", "— no RL presets —")]
+        return [UIFieldSelectOption(str(p["id"]), p["label"]) for p in presets]
+
+    # ------------------------------------------------------------------
+    # Scene action — pattern-identical to gcaction above. One ActionEffect
+    # with one scene-picker SELECT field; the operator binds RH events to
+    # ``RaceLink Scene`` instances using RotorHazard's standard action UI.
+    # ------------------------------------------------------------------
+
+    def _register_scene_action(self) -> None:
+        """Register the ``RaceLink Scene`` ActionEffect.
+
+        Single ActionEffect with one SELECT field (``rl_action_scene``). The
+        RH operator binds events to scenes through RotorHazard's standard
+        action-binding UI; this plugin does not maintain its own
+        event→scene table.
+        """
         if not getattr(self.controller, "action_reg_fn", None):
             # See note in _register_default_group_action.
+            return
+
+        scene_options = self._scene_options_for_action()
+        default_scene = scene_options[0].value if scene_options else "0"
+        fields = [
+            UIField(
+                "rl_action_scene",
+                "RaceLink Scene",
+                UIFieldType.SELECT,
+                options=scene_options,
+                value=default_scene,
+            ),
+        ]
+        effect = ActionEffect(
+            "RaceLink Scene",
+            self.applyScene,
+            fields,
+            name="rl_scene_action",
+        )
+        self.controller.action_reg_fn(effect)
+
+    def _scene_options_for_action(self) -> list[UIFieldSelectOption]:
+        """Pull the scene list for the action's scene-picker SELECT.
+
+        The option ``value`` is the scene's slug ``key`` (stable across
+        renames). Falls back to a single placeholder when no scenes exist
+        yet so RotorHazard still renders a valid SELECT field.
+        """
+        scenes_service = getattr(self.controller, "scenes_service", None)
+        if scenes_service is None:
+            return [UIFieldSelectOption("", "— no scenes —")]
+        try:
+            scenes = scenes_service.list()
+        except Exception:
+            # swallow-ok: never block action registration on scene-load issues
+            logger.exception("RL: failed to load scene list for action")
+            return [UIFieldSelectOption("", "— no scenes —")]
+        if not scenes:
+            return [UIFieldSelectOption("", "— no scenes —")]
+        return [UIFieldSelectOption(str(s["key"]), str(s["label"])) for s in scenes]
+
+    def applyScene(self, action: ActionPayload, _args: Any = None) -> None:  # noqa: N802
+        """Run a scene by key when invoked by RotorHazard at event time."""
+        scene_key = str(action.get("rl_action_scene") or "").strip()
+        if not scene_key:
+            logger.debug("applyScene: no scene selected; skipping")
+            return
+        runner = getattr(self.controller, "runScene", None)
+        if not callable(runner):
+            logger.warning("applyScene: controller.runScene not wired")
+            return
+        try:
+            result = runner(scene_key)
+        except Exception:
+            logger.exception("applyScene: runScene(%r) raised", scene_key)
+            return
+        ok = bool(getattr(result, "ok", False))
+        if ok:
+            logger.debug("applyScene: scene %r ran ok", scene_key)
+        else:
+            err = getattr(result, "error", None) or "scene_failed"
+            logger.warning("applyScene: scene %r failed: %s", scene_key, err)
+
+    # Phase D rename: ``wled_preset`` (pre-rename ``wled_control``) uses the
+    # legacy WLED ``presets_*.json`` list and therefore only makes sense inside
+    # the RaceLink WebUI. Skipping it here keeps the RotorHazard action panel
+    # free of WLED preset ids.
+    _RH_SKIPPED_SPECIAL_FUNCTIONS = frozenset({"wled_preset"})
+
+    def _register_special_actions(self, *, presets_only: bool = False) -> None:
+        """Register capability-driven special actions.
+
+        ``presets_only=True`` is a no-op fast path: after Phase C the only
+        preset-dependent RH UI (the ``rl_quickset_preset`` select and the
+        default group-action preset select) is rebuilt directly in
+        ``_register_quickset_preset_only`` / ``_register_default_group_action``
+        from ``RLPresetsService``. The remaining special actions
+        (``wled_control_advanced``, ``startblock_control``) are unaffected by
+        RL-preset mutations, so a ``presets_only`` refresh skips them.
+        """
+        if not getattr(self.controller, "action_reg_fn", None):
+            # See note in _register_default_group_action.
+            return
+        if presets_only:
             return
         specials = get_specials_config(
             context={"rhapi": self.rhapi, "gc": self.controller}
@@ -110,6 +229,9 @@ class RotorHazardActionsMixin:
 
         for fn_info in functions:
             if fn_info.get("type", "control") != "control":
+                continue
+            # Phase C: some functions are WebUI-only (see _RH_SKIPPED_...).
+            if fn_info.get("key") in self._RH_SKIPPED_SPECIAL_FUNCTIONS:
                 continue
             self._register_special_action_variants(
                 cap_key=cap_key,
@@ -139,7 +261,7 @@ class RotorHazardActionsMixin:
         }
 
         if bool(fn_info.get("unicast")):
-            self._register_special_effect(
+            self._register_special_action(
                 action_meta=action_meta,
                 cap_key=cap_key,
                 options_by_key=options_by_key,
@@ -147,14 +269,14 @@ class RotorHazardActionsMixin:
             )
 
         if bool(fn_info.get("broadcast")):
-            self._register_special_effect(
+            self._register_special_action(
                 action_meta=action_meta,
                 cap_key=cap_key,
                 options_by_key=options_by_key,
                 mode="group",
             )
 
-    def _register_special_effect(
+    def _register_special_action(
         self,
         *,
         action_meta: OptionMeta,
@@ -162,7 +284,9 @@ class RotorHazardActionsMixin:
         options_by_key: dict[str, OptionMeta],
         mode: str,
     ) -> None:
-        """Register a single special action effect."""
+        """Register a single special-action handler. Builds an RH ``ActionEffect``
+        (RotorHazard's API class) — the ``effect`` local below is RH terminology,
+        not a WLED effect."""
         fields = self._build_special_fields(
             cap_key=cap_key,
             fn_key=str(action_meta["fn_key"]),
@@ -417,12 +541,17 @@ class RotorHazardActionsMixin:
         action: ActionPayload,
         _args: Any = None,
     ) -> None:
-        """Apply a direct device action or quickset action."""
+        """Apply a direct device action or quickset action.
+
+        Phase C: ``rl_action_preset`` is a stable int preset id from
+        ``RLPresetsService``. The host-side ``sendRlPresetById`` resolves it
+        and sends ``OPC_CONTROL_ADV`` with the persisted parameter snapshot.
+        """
         if "rl_action_device" in action:
             self._apply_device_action(
                 device_addr=str(action["rl_action_device"]),
                 brightness=int(action["rl_action_brightness"]),
-                preset_id=int(action["rl_action_effect"]),
+                preset_id=int(action["rl_action_preset"]),
             )
 
         if "manual" in action:
@@ -435,17 +564,20 @@ class RotorHazardActionsMixin:
         brightness: int,
         preset_id: int,
     ) -> None:
-        """Apply control values to a specific device."""
+        """Apply a RL preset to a specific device by id."""
         logger.debug("Action triggered")
         target_device = self.controller.getDeviceFromAddress(device_addr)
         if target_device is None:
             logger.warning("nodeSwitch: device not found: %r", device_addr)
             return
 
-        target_device.brightness = brightness
-        target_device.presetId = preset_id
-        target_device.flags = self._build_power_flags(brightness)
-        self.controller.sendRaceLink(target_device)
+        ok = self.controller.sendRlPresetById(
+            preset_id,
+            targetDevice=target_device,
+            brightness_override=brightness,
+        )
+        if not ok:
+            logger.warning("nodeSwitch: preset id=%r could not be applied", preset_id)
 
     def _apply_manual_device_action(self) -> None:
         """Apply the saved quickset values to a specific device."""
@@ -458,11 +590,14 @@ class RotorHazardActionsMixin:
             return
 
         brightness = int(self.rhapi.db.option("rl_quickset_brightness", None))
-        preset_id = int(self.rhapi.db.option("rl_quickset_effect", None))
-        target_device.brightness = brightness
-        target_device.presetId = preset_id
-        target_device.flags = self._build_power_flags(brightness)
-        self.controller.sendRaceLink(target_device)
+        preset_id = int(self.rhapi.db.option("rl_quickset_preset", None))
+        ok = self.controller.sendRlPresetById(
+            preset_id,
+            targetDevice=target_device,
+            brightness_override=brightness,
+        )
+        if not ok:
+            logger.warning("nodeSwitch(manual): preset id=%d could not be applied", preset_id)
 
     def groupSwitch(  # noqa: N802
         self,
@@ -475,7 +610,7 @@ class RotorHazardActionsMixin:
             self._send_group_action(
                 group_id=int(action["rl_action_group"]),
                 brightness=int(action["rl_action_brightness"]),
-                preset_id=int(action["rl_action_effect"]),
+                preset_id=int(action["rl_action_preset"]),
             )
 
         if "manual" in action:
@@ -483,7 +618,7 @@ class RotorHazardActionsMixin:
             self._send_group_action(
                 group_id=int(self.rhapi.db.option("rl_quickset_group", None)),
                 brightness=int(self.rhapi.db.option("rl_quickset_brightness", None)),
-                preset_id=int(self.rhapi.db.option("rl_quickset_effect", None)),
+                preset_id=int(self.rhapi.db.option("rl_quickset_preset", None)),
             )
 
     def _send_group_action(
@@ -493,14 +628,11 @@ class RotorHazardActionsMixin:
         brightness: int,
         preset_id: int,
     ) -> None:
-        """Send a group control action to the controller."""
-        self.controller.sendGroupControl(
-            group_id,
-            self._build_power_flags(brightness),
+        """Apply a RL preset to a group (broadcast) by id."""
+        ok = self.controller.sendRlPresetById(
             preset_id,
-            brightness,
+            targetGroup=group_id,
+            brightness_override=brightness,
         )
-
-    def _build_power_flags(self, brightness: int) -> int:
-        """Build the standard RaceLink control flags for a brightness value."""
-        return (RL_FLAG_POWER_ON if brightness > 0 else 0) | RL_FLAG_HAS_BRI
+        if not ok:
+            logger.warning("groupSwitch: preset id=%r could not be applied", preset_id)

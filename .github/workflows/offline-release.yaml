@@ -162,13 +162,13 @@ jobs:
           echo "zip_path=$(tail -n 1 /tmp/offline_bundle_path.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: racelink_rh_plugin_offline
           path: ${{ steps.build_bundle.outputs.zip_path }}
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.manifest_version.outputs.tag }}
           target_commitish: ${{ inputs.target_branch }}

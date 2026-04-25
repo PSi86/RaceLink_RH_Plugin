@@ -168,12 +168,30 @@ class _FakeRepo:
         return list(self._items)
 
 
+class _FakeScenesService:
+    """Stand-in for SceneService — exposes a static list and a settable
+    ``on_changed`` hook. Used by the scope-routing tests to assert that the
+    SCENES scope re-registers the ``RaceLink Scene`` ActionEffect."""
+
+    def __init__(self, scenes: list[dict] | None = None) -> None:
+        self._scenes = list(scenes or [])
+        self.on_changed: Any = None
+
+    def list(self) -> list[dict]:
+        return [dict(s) for s in self._scenes]
+
+
 class _FakeController:
     def __init__(self, devices: list[Any], groups: list[Any]) -> None:
         self.device_repository = _FakeRepo(devices)
         self.group_repository = _FakeRepo(groups)
         self.action_reg_fn = MagicMock(name="action_reg_fn")
-        self.uiEffectList: list[Any] = []
+        self.uiPresetList: list[Any] = []
+        self.scenes_service = _FakeScenesService(scenes=[
+            {"id": 0, "key": "start", "label": "Start"},
+            {"id": 1, "key": "finish", "label": "Finish"},
+        ])
+        self.runScene = MagicMock(name="runScene")  # noqa: N815 — RH-API style
 
     def save_to_db(self, *_args: Any, **_kwargs: Any) -> None:
         return None
@@ -314,17 +332,47 @@ def test_groups_scope_refreshes_group_bound_fields_only() -> None:
     assert harness.controller.action_reg_fn.called
 
 
-def test_effects_scope_refreshes_effect_selectors_only() -> None:
-    """``EFFECTS`` scope should refresh only effect-backed selectors."""
+def test_presets_scope_refreshes_preset_selectors_only() -> None:
+    """``PRESETS`` scope should refresh only preset-backed selectors."""
     harness = _build_scope_harness()
     harness.adapter.apply_scoped_update(
-        {harness.state_scope.EFFECTS}, broadcast_panels=True
+        {harness.state_scope.PRESETS}, broadcast_panels=True
     )
 
     names = harness.registered_field_names()
-    assert "rl_quickset_effect" in names
+    assert "rl_quickset_preset" in names
     assert "rl_quickset_group" not in names
     assert "rl_assignToGroup" not in names
+
+
+def test_scenes_scope_refreshes_scene_action_only() -> None:
+    """``SCENES`` scope should re-register only the RaceLink Scene action.
+
+    Group / device / preset selectors are untouched (scenes_service CRUD has
+    no impact on those lists). The action_reg_fn is invoked exactly once for
+    the scene action; no field-registry mutations happen.
+    """
+    harness = _build_scope_harness()
+    harness.adapter.apply_scoped_update(
+        {harness.state_scope.SCENES}, broadcast_panels=True
+    )
+
+    # No quickset / assign-to-group fields touched
+    names = harness.registered_field_names()
+    assert "rl_quickset_preset" not in names
+    assert "rl_quickset_group" not in names
+    assert "rl_assignToGroup" not in names
+
+    # The RaceLink Scene ActionEffect was registered (action_reg_fn called).
+    assert harness.controller.action_reg_fn.called
+    # Its sole field carries the scene key as the SELECT option value.
+    registered_action = harness.controller.action_reg_fn.call_args.args[0]
+    assert registered_action.name == "rl_scene_action"
+    field_names = [f.name for f in registered_action.fields]
+    assert field_names == ["rl_action_scene"]
+    option_values = [opt.value for opt in registered_action.fields[0].kwargs["options"]]
+    assert "start" in option_values
+    assert "finish" in option_values
 
 
 def test_full_scope_reregisters_only_dynamic_after_bootstrap() -> None:
@@ -345,7 +393,13 @@ def test_full_scope_reregisters_only_dynamic_after_bootstrap() -> None:
     assert "rl_quickset_brightness" not in names
     assert "rl_assignToGroup" in names
     assert "rl_quickset_group" in names
-    assert "rl_quickset_effect" in names
+    assert "rl_quickset_preset" in names
+    # Scenes ActionEffect is part of the dynamic re-register set on FULL.
+    rl_scene_action_calls = [
+        c for c in harness.controller.action_reg_fn.call_args_list
+        if c.args and getattr(c.args[0], "name", None) == "rl_scene_action"
+    ]
+    assert len(rl_scene_action_calls) == 1
 
     quickbutton_names = [key for _panel, key in harness.rhapi.ui.quickbuttons]
     assert "rl_btn_set_defaults" not in quickbutton_names

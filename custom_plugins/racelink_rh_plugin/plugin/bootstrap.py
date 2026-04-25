@@ -10,6 +10,7 @@ from typing import Any
 
 from controller import RaceLink_Host
 from eventmanager import Evt
+from racelink.domain import state_scope
 
 from .ui import RotorHazardUIAdapter
 
@@ -126,6 +127,40 @@ def initialize(rhapi: Any) -> RaceLinkPlugin:
         event_source=rh_adapter.source,
         data_sink=null_sink_factory(),
     )
+
+    # BF3: refresh RH-facing UI when RL-presets change (create / update /
+    # delete / duplicate). The Host service exposes a single ``on_changed``
+    # callback; the scope token ``PRESETS`` matches the one used for WLED
+    # preset reloads, so the existing narrow-refresh path re-registers only
+    # the preset-bound quickset field.
+    rl_presets_service = rl_app.services.get("rl_presets")
+    if rl_presets_service is not None:
+        def _on_rl_presets_changed() -> None:
+            try:
+                _sync_adapter_state(
+                    rh_adapter,
+                    broadcast_panels=True,
+                    scopes={state_scope.PRESETS},
+                )
+            except Exception:
+                logger.exception("RL: failed to refresh RH UI after RL-presets change")
+        rl_presets_service.on_changed = _on_rl_presets_changed
+
+    # Same pattern for the scenes service — a SCENES-scoped refresh
+    # re-registers the ``RaceLink Scene`` ActionEffect with the current
+    # scene list (see ``RotorHazardActionsMixin._register_scene_action``).
+    scenes_service = rl_app.services.get("scenes")
+    if scenes_service is not None:
+        def _on_scenes_changed() -> None:
+            try:
+                _sync_adapter_state(
+                    rh_adapter,
+                    broadcast_panels=True,
+                    scopes={state_scope.SCENES},
+                )
+            except Exception:
+                logger.exception("RL: failed to refresh RH UI after scenes change")
+        scenes_service.on_changed = _on_scenes_changed
 
     plugin = RaceLinkPlugin(
         controller=controller,
