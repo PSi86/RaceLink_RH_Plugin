@@ -87,7 +87,7 @@ class RotorHazardActionsMixin:
         self.controller.action_reg_fn(effect)
 
     def _rl_preset_options_for_action(self) -> list[UIFieldSelectOption]:
-        """Build select-options for the default group ActionEffect from the RL preset store.
+        """Build select-options for the group ActionEffect from the RL preset store.
 
         Mirrors :meth:`RotorHazardUIAdapter._rl_preset_options` but stays local to the
         actions mixin to keep import graphs simple.
