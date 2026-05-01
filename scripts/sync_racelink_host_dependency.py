@@ -14,25 +14,11 @@ DEPS_PATH = REPO_ROOT / "build" / "deps.json"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 MANIFEST_PATH = REPO_ROOT / "custom_plugins" / "racelink_rh_plugin" / "manifest.json"
 README_PATH = REPO_ROOT / "README.md"
-DOCS_PATH = REPO_ROOT / "docs" / "manifest-dependency-format.md"
 
 PYPROJECT_PATTERN = re.compile(r'^dependencies = \["[^"]*"\]$', re.MULTILINE)
 README_SCOPE_PATTERN = re.compile(
-    r"- `uv` dependency on the immutable `racelink-host` GitHub release wheel for .*"
-)
-README_INSTALL_PATTERN = re.compile(
-    r"installs the .* `racelink-host` wheel from the matching "
-    r"`RaceLink_Host` GitHub release\."
-)
-DOCS_DECISION_PATTERN = re.compile(
-    r"(?<=For online installations, this repository uses:\n\n)`[^`]+`"
-)
-DOCS_GIT_ROW_PATTERN = re.compile(
-    r"`git\+https://github\.com/PSi86/RaceLink_Host\.git@v[^`]+`"
-)
-DOCS_SPECIFIER_ROW_PATTERN = re.compile(
-    r"`racelink-host==[^`]+` \| pass \| accepted by RHFest, "
-    r"but not used for online installations"
+    r"\* `uv` dependency on the immutable `racelink-host` GitHub release\n"
+    r"  wheel for the repo-pinned development baseline(?: `[^`]+`)?"
 )
 
 
@@ -80,7 +66,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Sync RaceLink_Host dependency metadata into pyproject.toml, "
-            "manifest.json, and related docs."
+            "manifest.json, and README.md."
         )
     )
     parser.add_argument(
@@ -142,37 +128,10 @@ def _render_manifest(host: HostDependency) -> str:
 
 def _render_readme(host: HostDependency) -> str:
     readme = README_PATH.read_text(encoding="utf-8")
-    updated = README_SCOPE_PATTERN.sub(
-        "- `uv` dependency on the immutable `racelink-host` GitHub release wheel "
-        f"for the repo-pinned development baseline `{host.version}`",
+    return README_SCOPE_PATTERN.sub(
+        "* `uv` dependency on the immutable `racelink-host` GitHub release\n"
+        f"  wheel for the repo-pinned development baseline `{host.version}`",
         readme,
-        count=1,
-    )
-    return README_INSTALL_PATTERN.sub(
-        f"installs the repo-pinned `racelink-host` wheel from the matching "
-        "`RaceLink_Host` GitHub release for development baseline "
-        f"`{host.version}`.",
-        updated,
-        count=1,
-    )
-
-
-def _render_docs(host: HostDependency) -> str:
-    docs = DOCS_PATH.read_text(encoding="utf-8")
-    updated = DOCS_DECISION_PATTERN.sub(
-        f"`{host.manifest_dependency}`",
-        docs,
-        count=1,
-    )
-    updated = DOCS_GIT_ROW_PATTERN.sub(
-        f"`git+https://github.com/PSi86/RaceLink_Host.git@{host.host_release_tag}`",
-        updated,
-        count=1,
-    )
-    return DOCS_SPECIFIER_ROW_PATTERN.sub(
-        f"`{host.package_name}=={host.version}` | pass | accepted and chosen "
-        "by RHFest, but not used for online installations",
-        updated,
         count=1,
     )
 
@@ -184,7 +143,6 @@ def sync_generated_files(host: HostDependency, *, write: bool) -> list[str]:
         (PYPROJECT_PATH, _render_pyproject),
         (MANIFEST_PATH, _render_manifest),
         (README_PATH, _render_readme),
-        (DOCS_PATH, _render_docs),
     )
     for path, render_func in sync_steps:
         current = path.read_text(encoding="utf-8")

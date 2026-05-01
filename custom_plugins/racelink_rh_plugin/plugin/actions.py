@@ -87,9 +87,11 @@ class RotorHazardActionsMixin:
         self.controller.action_reg_fn(effect)
 
     def _rl_preset_options_for_action(self) -> list[UIFieldSelectOption]:
-        """Build select-options for the default group ActionEffect from the
-        RL preset store. Mirrors :meth:`RotorHazardUIAdapter._rl_preset_options`
-        but stays local to the actions mixin to keep import graphs simple."""
+        """Build select-options for the default group ActionEffect from the RL preset store.
+
+        Mirrors :meth:`RotorHazardUIAdapter._rl_preset_options` but stays local to the
+        actions mixin to keep import graphs simple.
+        """
         rl_service = getattr(self.controller, "rl_presets_service", None)
         if rl_service is None:
             return [UIFieldSelectOption("0", "— no RL presets —")]
@@ -284,9 +286,11 @@ class RotorHazardActionsMixin:
         options_by_key: dict[str, OptionMeta],
         mode: str,
     ) -> None:
-        """Register a single special-action handler. Builds an RH ``ActionEffect``
-        (RotorHazard's API class) — the ``effect`` local below is RH terminology,
-        not a WLED effect."""
+        """Register a single special-action handler.
+
+        Builds an RH ``ActionEffect`` (RotorHazard's API class) — the ``effect`` local
+        below is RH terminology, not a WLED effect.
+        """
         fields = self._build_special_fields(
             cap_key=cap_key,
             fn_key=str(action_meta["fn_key"]),
@@ -597,7 +601,9 @@ class RotorHazardActionsMixin:
             brightness_override=brightness,
         )
         if not ok:
-            logger.warning("nodeSwitch(manual): preset id=%d could not be applied", preset_id)
+            logger.warning(
+                "nodeSwitch(manual): preset id=%d could not be applied", preset_id
+            )
 
     def groupSwitch(  # noqa: N802
         self,

@@ -169,9 +169,11 @@ class _FakeRepo:
 
 
 class _FakeScenesService:
-    """Stand-in for SceneService — exposes a static list and a settable
-    ``on_changed`` hook. Used by the scope-routing tests to assert that the
-    SCENES scope re-registers the ``RaceLink Scene`` ActionEffect."""
+    """Stand-in for SceneService — exposes a static list and a settable hook.
+
+    The ``on_changed`` hook is used by the scope-routing tests to assert that
+    the SCENES scope re-registers the ``RaceLink Scene`` ActionEffect.
+    """
 
     def __init__(self, scenes: list[dict] | None = None) -> None:
         self._scenes = list(scenes or [])
@@ -191,7 +193,7 @@ class _FakeController:
             {"id": 0, "key": "start", "label": "Start"},
             {"id": 1, "key": "finish", "label": "Finish"},
         ])
-        self.runScene = MagicMock(name="runScene")  # noqa: N815 — RH-API style
+        self.runScene = MagicMock(name="runScene")
 
     def save_to_db(self, *_args: Any, **_kwargs: Any) -> None:
         return None

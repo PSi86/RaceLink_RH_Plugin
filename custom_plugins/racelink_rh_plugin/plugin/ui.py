@@ -111,8 +111,8 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
         if resolved == {state_scope.NONE}:
             return
 
-        needs_groups, needs_devices, needs_presets, needs_scenes = self._resolve_refresh_flags(
-            resolved
+        needs_groups, needs_devices, needs_presets, needs_scenes = (
+            self._resolve_refresh_flags(resolved)
         )
         if not any((needs_groups, needs_devices, needs_presets, needs_scenes)):
             return
@@ -122,8 +122,13 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
         # (RL preset CRUD) leave those lists unchanged, so regenerating them
         # was pure overhead (~3 debug lines per preset edit). Scenes-only is
         # the same situation (scene CRUD has no impact on group/device lists).
-        presets_only = needs_presets and not (needs_groups or needs_devices or needs_scenes)
-        if presets_only or (needs_scenes and not (needs_groups or needs_devices or needs_presets)):
+        presets_only = needs_presets and not (
+            needs_groups or needs_devices or needs_scenes
+        )
+        scenes_only = needs_scenes and not (
+            needs_groups or needs_devices or needs_presets
+        )
+        if presets_only or scenes_only:
             self._ensure_ui_state()
         else:
             self.refresh_ui_state()
@@ -516,9 +521,11 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
         )
 
     def _register_quickset_preset_only(self) -> None:
-        """Register only ``rl_quickset_preset`` — backed exclusively by
-        RaceLink-native presets (Phase C). WLED ``presets_*.json`` stays in the
-        RaceLink WebUI; the RotorHazard quickset shows only RL presets."""
+        """Register only ``rl_quickset_preset`` — backed exclusively by RL presets.
+
+        Phase C. WLED ``presets_*.json`` stays in the RaceLink WebUI; the
+        RotorHazard quickset shows only RL presets.
+        """
         preset_options = self._rl_preset_options()
         default_preset = preset_options[0].value if preset_options else "0"
         self.rhapi.fields.register_option(
