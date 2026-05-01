@@ -7,9 +7,9 @@
   "author_uri": "https://github.com/PSi86",
   "license": "MIT",
   "required_rhapi_version": "1.4",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "zip_filename": "racelink_rh_plugin_offline.zip",
   "dependencies": [
-    "git+https://github.com/PSi86/RaceLink_Host.git@v0.1.4"
+    "git+https://github.com/PSi86/RaceLink_Host.git@v0.1.5"
   ]
 }
