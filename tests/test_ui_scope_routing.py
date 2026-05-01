@@ -189,10 +189,12 @@ class _FakeController:
         self.group_repository = _FakeRepo(groups)
         self.action_reg_fn = MagicMock(name="action_reg_fn")
         self.uiPresetList: list[Any] = []
-        self.scenes_service = _FakeScenesService(scenes=[
-            {"id": 0, "key": "start", "label": "Start"},
-            {"id": 1, "key": "finish", "label": "Finish"},
-        ])
+        self.scenes_service = _FakeScenesService(
+            scenes=[
+                {"id": 0, "key": "start", "label": "Start"},
+                {"id": 1, "key": "finish", "label": "Finish"},
+            ]
+        )
         self.runScene = MagicMock(name="runScene")
 
     def save_to_db(self, *_args: Any, **_kwargs: Any) -> None:
@@ -398,7 +400,8 @@ def test_full_scope_reregisters_only_dynamic_after_bootstrap() -> None:
     assert "rl_quickset_preset" in names
     # Scenes ActionEffect is part of the dynamic re-register set on FULL.
     rl_scene_action_calls = [
-        c for c in harness.controller.action_reg_fn.call_args_list
+        c
+        for c in harness.controller.action_reg_fn.call_args_list
         if c.args and getattr(c.args[0], "name", None) == "rl_scene_action"
     ]
     assert len(rl_scene_action_calls) == 1
