@@ -80,7 +80,16 @@ class BootstrapTests(unittest.TestCase):
 
         racelink_domain_mod = types.ModuleType("racelink.domain")
         racelink_domain_mod.RL_DeviceGroup = object
+        # bootstrap.py imports ``state_scope`` from this module; provide a
+        # stub with the tokens bootstrap actually references.
+        state_scope_stub = types.SimpleNamespace(
+            RL_PRESETS="rl_presets",
+            WLED_PRESETS="wled_presets",
+            SCENES="scenes",
+        )
+        racelink_domain_mod.state_scope = state_scope_stub
         sys.modules["racelink.domain"] = racelink_domain_mod
+        sys.modules["racelink.domain.state_scope"] = state_scope_stub
 
         racelink_state_mod = types.ModuleType("racelink.state")
         racelink_state_mod.get_runtime_state_repository = Mock(

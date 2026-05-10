@@ -184,22 +184,24 @@ class RotorHazardActionsMixin:
             err = getattr(result, "error", None) or "scene_failed"
             logger.warning("applyScene: scene %r failed: %s", scene_key, err)
 
-    # Phase D rename: ``wled_preset`` (pre-rename ``wled_control``) uses the
-    # legacy WLED ``presets_*.json`` list and therefore only makes sense inside
-    # the RaceLink WebUI. Skipping it here keeps the RotorHazard action panel
-    # free of WLED preset ids.
+    # The ``wled_preset`` Specials function picks a classical WLED preset
+    # id from the device's ``presets.json``. RotorHazard's race-side UI
+    # has no use for WLED presets (operators interact with RaceLink-native
+    # RL presets via ``rl_preset``), so we skip the WLED-preset action
+    # panel entry to keep the RH UI uncluttered.
     _RH_SKIPPED_SPECIAL_FUNCTIONS = frozenset({"wled_preset"})
 
     def _register_special_actions(self, *, presets_only: bool = False) -> None:
         """Register capability-driven special actions.
 
-        ``presets_only=True`` is a no-op fast path: after Phase C the only
+        ``presets_only=True`` is a fast path that skips capabilities whose
+        UI bindings do not depend on the RL preset list: the only
         preset-dependent RH UI (the ``rl_quickset_preset`` select and the
         default group-action preset select) is rebuilt directly in
         ``_register_quickset_preset_only`` / ``_register_default_group_action``
         from ``RLPresetsService``. The remaining special actions
-        (``wled_control_advanced``, ``startblock_control``) are unaffected by
-        RL-preset mutations, so a ``presets_only`` refresh skips them.
+        (``rl_preset``, ``startblock_control``) are unaffected by RL-preset
+        mutations themselves, so a ``presets_only`` refresh skips them.
         """
         if not getattr(self.controller, "action_reg_fn", None):
             # See note in _register_default_group_action.

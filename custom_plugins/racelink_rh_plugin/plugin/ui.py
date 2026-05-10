@@ -35,10 +35,10 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
 
     Dynamic UI elements re-register only when their backing data changes:
     ``rl_assignToGroup`` for ``GROUPS``, ``rl_quickset_group`` for
-    ``GROUPS``, ``rl_quickset_preset`` for ``PRESETS``, the default-group
-    ``ActionEffect`` for ``GROUPS`` or ``PRESETS``, and special
-    ``ActionEffect`` definitions for ``GROUPS``, ``DEVICES``,
-    ``DEVICE_MEMBERSHIP``, or ``PRESETS``.
+    ``GROUPS``, ``rl_quickset_preset`` for ``RL_PRESETS``, the
+    default-group ``ActionEffect`` for ``GROUPS`` or ``RL_PRESETS``, and
+    special ``ActionEffect`` definitions for ``GROUPS``, ``DEVICES``,
+    ``DEVICE_MEMBERSHIP``, or ``RL_PRESETS``.
 
     DEVICE_SPECIALS alone does not affect any RH UI element -- it only writes
     the specials dict to the device record. The WebUI re-renders from SSE.
@@ -155,7 +155,7 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
         needs_devices = bool(
             resolved & {state_scope.DEVICES, state_scope.DEVICE_MEMBERSHIP}
         )
-        needs_presets = state_scope.PRESETS in resolved
+        needs_presets = state_scope.RL_PRESETS in resolved
         needs_scenes = state_scope.SCENES in resolved
         return needs_groups, needs_devices, needs_presets, needs_scenes
 
@@ -597,7 +597,16 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
         )
 
     def apply_presets_options(self, parsed: list[tuple[int, str]] | None) -> None:
-        """Apply preset metadata loaded by the host package."""
+        """Apply WLED preset metadata loaded by the host package.
+
+        Updates ``controller.uiPresetList`` from the parsed
+        ``presets.json`` registry. The broadcast scope is
+        ``WLED_PRESETS`` — RH's own ``rl_quickset_preset`` field is
+        bound to RL presets, not WLED presets, so this refresh fires
+        only the WLED-bound subscribers (currently none on the RH
+        side; the broadcast is kept for consistency with the host's
+        ``/api/presets/*`` SSE wiring).
+        """
         if not parsed:
             self.controller.uiPresetList = [
                 UIFieldSelectOption("0", "No presets.json found")
@@ -607,7 +616,7 @@ class RotorHazardUIAdapter(RotorHazardActionsMixin, RotorHazardDataIOMixin):
                 UIFieldSelectOption(str(preset_id), name) for preset_id, name in parsed
             ]
         try:
-            self.apply_scoped_update({state_scope.PRESETS}, broadcast_panels=True)
+            self.apply_scoped_update({state_scope.WLED_PRESETS}, broadcast_panels=True)
         except Exception:
             logger.exception("Unable to refresh RaceLink quickset UI")
 
