@@ -336,11 +336,11 @@ def test_groups_scope_refreshes_group_bound_fields_only() -> None:
     assert harness.controller.action_reg_fn.called
 
 
-def test_presets_scope_refreshes_preset_selectors_only() -> None:
-    """``PRESETS`` scope should refresh only preset-backed selectors."""
+def test_rl_presets_scope_refreshes_preset_selectors_only() -> None:
+    """``RL_PRESETS`` scope should refresh only RL-preset-backed selectors."""
     harness = _build_scope_harness()
     harness.adapter.apply_scoped_update(
-        {harness.state_scope.PRESETS}, broadcast_panels=True
+        {harness.state_scope.RL_PRESETS}, broadcast_panels=True
     )
 
     names = harness.registered_field_names()

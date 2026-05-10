@@ -128,11 +128,11 @@ def initialize(rhapi: Any) -> RaceLinkPlugin:
         data_sink=null_sink_factory(),
     )
 
-    # BF3: refresh RH-facing UI when RL-presets change (create / update /
+    # Refresh RH-facing UI when RL-presets change (create / update /
     # delete / duplicate). The Host service exposes a single ``on_changed``
-    # callback; the scope token ``PRESETS`` matches the one used for WLED
-    # preset reloads, so the existing narrow-refresh path re-registers only
-    # the preset-bound quickset field.
+    # callback; the ``RL_PRESETS`` scope re-registers only the
+    # ``rl_quickset_preset`` field, which is the sole RH UI element that
+    # binds to the RL preset list.
     rl_presets_service = rl_app.services.get("rl_presets")
     if rl_presets_service is not None:
 
@@ -141,7 +141,7 @@ def initialize(rhapi: Any) -> RaceLinkPlugin:
                 _sync_adapter_state(
                     rh_adapter,
                     broadcast_panels=True,
-                    scopes={state_scope.PRESETS},
+                    scopes={state_scope.RL_PRESETS},
                 )
             except Exception:
                 logger.exception("RL: failed to refresh RH UI after RL-presets change")
