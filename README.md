@@ -31,7 +31,7 @@ guide and the architecture, follow the link above.
 * Plugin manifest for RotorHazard + RHFest validation
 * Development tooling based on [uv] and [pre-commit]
 * `uv` dependency on the immutable `racelink-host` GitHub release
-  wheel for the repo-pinned development baseline `0.1.4`
+  wheel for the repo-pinned development baseline `0.1.6`
 
 ## Architecture (in one paragraph)
 
