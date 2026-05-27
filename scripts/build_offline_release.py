@@ -203,7 +203,12 @@ def _validate_offline_runtime_install(
     previous_force_env = os.environ.get(FORCE_INSTALL_ENV)
     sys.path.insert(0, str(custom_plugins_root))
     created_stub_modules = _install_rotorhazard_stubs()
-    imported_modules = ["racelink", "racelink.app", "racelink.web", "racelink.controller"]
+    imported_modules = [
+        "racelink",
+        "racelink.app",
+        "racelink.web",
+        "racelink.controller",
+    ]
     try:
         os.environ[INSTALL_TARGET_ENV] = str(install_target)
         os.environ[FORCE_INSTALL_ENV] = "1"
