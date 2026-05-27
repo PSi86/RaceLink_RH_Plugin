@@ -8,8 +8,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from controller import RaceLink_Host
 from eventmanager import Evt
+from racelink.controller import RaceLink_Host
 from racelink.domain import state_scope
 
 from .ui import RotorHazardUIAdapter
