@@ -203,16 +203,21 @@ def _validate_offline_runtime_install(
     previous_force_env = os.environ.get(FORCE_INSTALL_ENV)
     sys.path.insert(0, str(custom_plugins_root))
     created_stub_modules = _install_rotorhazard_stubs()
-    imported_modules = ["controller", "racelink", "racelink.app", "racelink.web"]
+    imported_modules = [
+        "racelink",
+        "racelink.app",
+        "racelink.web",
+        "racelink.controller",
+    ]
     try:
         os.environ[INSTALL_TARGET_ENV] = str(install_target)
         os.environ[FORCE_INSTALL_ENV] = "1"
         module = _load_staged_plugin_module(stage_plugin_dir, custom_plugins_root)
         module._ensure_host_runtime_available()  # noqa: SLF001
-        importlib.import_module("controller")
+        importlib.import_module("racelink.controller")
         importlib.import_module("racelink.app")
         importlib.import_module("racelink.web")
-        _assert_import_under_root("controller", install_target)
+        _assert_import_under_root("racelink.controller", install_target)
         _assert_import_under_root("racelink.app", install_target)
         _assert_import_under_root("racelink.web", install_target)
     finally:

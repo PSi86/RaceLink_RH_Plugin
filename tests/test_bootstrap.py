@@ -29,7 +29,7 @@ class BootstrapTests(unittest.TestCase):
         )
         sys.modules["eventmanager"] = eventmanager_mod
 
-        controller_mod = types.ModuleType("controller")
+        controller_mod = types.ModuleType("racelink.controller")
 
         class FakeRaceLinkHost:
             def __init__(
@@ -53,7 +53,7 @@ class BootstrapTests(unittest.TestCase):
                 return args
 
         controller_mod.RaceLink_Host = FakeRaceLinkHost
-        sys.modules["controller"] = controller_mod
+        sys.modules["racelink.controller"] = controller_mod
 
         racelink_app_mod = types.ModuleType("racelink.app")
         self.create_runtime = Mock(

@@ -41,10 +41,10 @@ def _install_eventmanager_stub() -> None:
 
 
 def _install_controller_stub() -> None:
-    if "controller" not in sys.modules:
-        controller = types.ModuleType("controller")
+    if "racelink.controller" not in sys.modules:
+        controller = types.ModuleType("racelink.controller")
         controller.RaceLink_Host = object
-        sys.modules["controller"] = controller
+        sys.modules["racelink.controller"] = controller
 
 
 def _install_data_export_stub() -> None:
