@@ -8,6 +8,11 @@ on:
   pull_request:
   schedule:
     - cron: "0 0 * * *"
+  # Manual runs: without this there is no "Run workflow" button and no
+  # API dispatch, so after the workflow has been disabled and re-enabled
+  # there is no way to re-validate the current main short of pushing a
+  # commit or waiting for the nightly schedule.
+  workflow_dispatch:
 
 jobs:
   validation:
