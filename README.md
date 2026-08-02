@@ -41,7 +41,7 @@ edge: bootstrap, UI registration, action wiring, event bridges. No
 pages or static assets are copied in. No remote-client layer.
 
 For the full picture see
-[RotorHazard plugin docs](https://psi86.github.io/RaceLink_Docs/RaceLink_RH_Plugin/).
+[RotorHazard plugin docs](https://docs.racelink.dev/RaceLink_RH_Plugin/).
 
 ## Development setup
 
@@ -61,7 +61,7 @@ uv run pre-commit run --all-files      # full check
 | **Offline** | The release ZIP bundles the host wheel under `custom_plugins/racelink_rh_plugin/offline_wheels/`. First plugin start installs the bundled wheel locally, then continues. |
 
 For the full installation walkthrough see
-[RotorHazard plugin (operator)](https://psi86.github.io/RaceLink_Docs/RaceLink_RH_Plugin/operator-setup/).
+[RotorHazard plugin (operator)](https://docs.racelink.dev/RaceLink_RH_Plugin/operator-setup/).
 
 ## Version mapping
 
@@ -72,7 +72,7 @@ For the full installation walkthrough see
   release; an override is available in the workflow input.
 
 For the full release flow see the
-[release playbook](https://psi86.github.io/RaceLink_Docs/RaceLink_RH_Plugin/release-playbook/).
+[release playbook](https://docs.racelink.dev/RaceLink_RH_Plugin/release-playbook/).
 
 ## Licence
 
